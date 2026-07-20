@@ -20,9 +20,15 @@ float TempSensor::readOnce() const {
   uint32_t mv = 0;
   for (int i = 0; i < 8; i++) mv += analogReadMilliVolts(PIN_NTC_ADC);
   mv /= 8;
-  // Divider: 3.3V - R_FIXED - node - NTC - GND, so mv is across the NTC.
-  if (mv < 20 || mv > 3280) return NAN; // open/short sensor
-  float rNtc = NTC_R_FIXED * (float)mv / (3300.0f - (float)mv);
+  // Divider: 3.3V - NTC - node - R_FIXED - GND, so mv is across the fixed
+  // resistor and rises with temperature. NTC on the high side on purpose:
+  // the ESP32-C3 ADC is only accurate up to ~2500 mV at 11 dB attenuation
+  // and saturates above — this orientation keeps every temperature below
+  // ~52C (node < 2.5 V) inside the accurate window, and clipping only
+  // occurs where any auto ramp is at 100% anyway.
+  if (mv < 50) return NAN;   // open NTC (a real read this low would mean < -60C)
+  if (mv > 3200) return NAN; // shorted NTC
+  float rNtc = NTC_R_FIXED * (3300.0f - (float)mv) / (float)mv;
   float tKelvin = 1.0f / (1.0f / (NTC_T_NOMINAL + 273.15f) +
                           logf(rNtc / NTC_R_NOMINAL) / NTC_BETA);
   return tKelvin - 273.15f;

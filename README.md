@@ -33,7 +33,13 @@ Controls one or more (Noctua NF-A20 5V PWM) fans from an ESP32-C3 board with a
 | Button | 9 | onboard BOOT button, active low |
 | Fan PWM (blue) | 10 | open-drain; fan pulls up to 5 V internally — no level shifter |
 | Fan tach (green) | 7 | from one fan; internal pull-up |
-| NTC | 3 | divider: 3.3 V → 100 kΩ → **GPIO3** → NTC 100k/3950 → GND |
+| NTC | 3 | divider: 3.3 V → **NTC 100k/3950** → GPIO3 → 100 kΩ → GND |
+
+**NTC orientation matters**: the NTC sits on the high side (to 3.3 V) because
+the ESP32-C3 ADC is only accurate up to ~2.5 V and saturates above. This way
+the node voltage rises with temperature and stays inside the accurate range
+for everything below ~52 °C, and an open sensor reads ~0 V (detectable fault
+→ auto mode fails safe to 100%).
 
 Power: 12 V → 5 V buck feeds the fans and the board's 5 V pin. Fan PWM and
 tach lines are shared/parallel for two fans (tach from only one fan).

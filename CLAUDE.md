@@ -56,9 +56,14 @@ tasks, no heap use after setup.
   internal pull-up to 5 V; pushing 3.3 V push-pull would fight it. Keep the
   `gpio_set_direction(..., GPIO_MODE_OUTPUT_OD)` call after `ledcAttachPin`.
 - PWM must stay at 25 kHz (Intel 4-pin fan spec); audible whine below ~21 kHz.
-- NTC divider: 3.3 V → 100 kΩ fixed → GPIO3 (ADC) → NTC → GND. The ADC
-  reads the voltage **across the NTC** — the conversion in TempSensor.cpp
-  assumes this orientation.
+- NTC divider: 3.3 V → NTC → GPIO3 (ADC) → 100 kΩ fixed → GND. The ADC reads
+  the voltage **across the fixed resistor** (rises with temperature) — the
+  conversion in TempSensor.cpp assumes this orientation. **Do not flip it**:
+  the C3 ADC saturates above ~2500 mV at 11 dB attenuation; NTC-on-top keeps
+  all temps < ~52 °C in the accurate window and makes an open NTC read ~0 V.
+- C3 ADC quirks: only ADC1 (GPIO0–4) is usable (ADC2 is broken/reserved on
+  the C3); readings above ~2500 mV are nonlinear garbage; always read via
+  `analogReadMilliVolts` so the eFuse calibration is applied.
 - OLED is a 72×40 SSD1306 (I2C, SDA=5, SCL=6) using the U8g2
   `SSD1306_72X40_ER` variant — tiny canvas, every pixel of layout matters.
 - The button is the board's BOOT strapping pin (GPIO9) — active low, fine at
