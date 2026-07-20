@@ -4,6 +4,29 @@
 
 // 72x40 SSD1306 UI. Main screen: temp, mode+level, duty bar, RPM.
 // A change popup takes over the full screen for POPUP_DURATION_MS.
+//
+// Main screen (normal):            Main screen (fan stalled):
+//   +--------------72px--------+     +---------------------------+
+//   |                          |     |                           |
+//   |  24.3°              A3   |     |  24.3°              M2    |
+//   |                          |     |                           |
+//   |  [#########_______]      |     |  [#####______________]    |
+//   |                          |     |                           |
+//   |  1450rpm            64%  |     |  ! FAN STALL !            |
+//   +--------------------------+     +---------------------------+
+//    temp (large)   mode+level        bottom line replaced by
+//    duty bar = live PWM output       warning while stalled
+//    rpm from tach    duty %
+//
+// Change popup (shown 1.5 s after any level/mode change, framed):
+//   +--------------------------+     +---------------------------+
+//   | +----------------------+ |     | +-----------------------+ |
+//   | |                      | |     | |                       | |
+//   | |        A 3           | |     | |        M 4            | |
+//   | |      (large)         | |     | |      (large)          | |
+//   | |        AUTO          | |     | |       MANUAL          | |
+//   | +----------------------+ |     | +-----------------------+ |
+//   +--------------------------+     +---------------------------+
 class DisplayUi {
 public:
   void begin();

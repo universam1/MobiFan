@@ -29,6 +29,13 @@ void DisplayUi::tick(uint32_t now, float tempC, bool tempValid, Mode mode,
   u8g2.sendBuffer();
 }
 
+// +--------------------------+
+// | +----------------------+ |  full-screen takeover, framed so a change
+// | |        A 3           | |  is unmistakable at a glance:
+// | |   logisoso22 (big)   | |    line 1: mode letter + level, centered
+// | |        AUTO          | |    line 2: mode spelled out, 5x8 font
+// | +----------------------+ |
+// +--------------------------+
 void DisplayUi::drawPopup() {
   char big[8];
   snprintf(big, sizeof(big), "%s %u",
@@ -41,6 +48,11 @@ void DisplayUi::drawPopup() {
   u8g2.drawFrame(0, 0, 72, 40);
 }
 
+// +--------------------------+
+// |  24.3°              A3   |  y=16: temp logisoso16 left, mode+level right
+// |  [#########_______]      |  y=21..29: duty bar = live PWM output
+// |  1450rpm            64%  |  y=39: rpm left, duty% right (5x8 font);
+// +--------------------------+        replaced by "! FAN STALL !" on stall
 void DisplayUi::drawMain(float tempC, bool tempValid, Mode mode, uint8_t level,
                          float dutyPct, uint32_t rpm, bool stalled) {
   // Temperature, large
