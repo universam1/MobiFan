@@ -48,7 +48,7 @@ calibration, and transfer function in
 | Buck FB PWM | 10 | push-pull → 1 kΩ + 1 µF filter → 30 kΩ into MP1584EN FB |
 | Fan tach | 7 | from one fan's sense wire; internal pull-up |
 | NTC | 3 | divider: 3.3 V → **NTC 100k/3950** → GPIO3 → 100 kΩ → GND |
-| DS18B20 (optional) | 4 | 1-Wire, normally powered, 4.7 kΩ pull-up to 3.3 V |
+| DS18B20 (optional) | 4 | 1-Wire, normally powered, no external pull-up (uses the C3's internal weak pull-up) |
 
 **NTC orientation matters**: the NTC sits on the high side (to 3.3 V) because
 the ESP32-C3 ADC is only accurate up to ~2.5 V and saturates above. This way
@@ -58,9 +58,10 @@ for everything below ~52 °C, and an open sensor reads ~0 V (detectable fault
 
 **DS18B20 is a build-time alternative** to the NTC divider, selected via a
 PlatformIO env (`pio run -e esp32c3-oled-ds18b20`) — both sensors share the
-same interface so the rest of the firmware is unchanged either way. Wiring,
-rationale, and the non-blocking conversion polling are covered in
-[docs/temp-sensor.md](docs/temp-sensor.md).
+same interface so the rest of the firmware is unchanged either way. No
+external pull-up resistor is needed (the firmware enables the C3's internal
+weak pull-up instead). Wiring, rationale, and the non-blocking conversion
+polling are covered in [docs/temp-sensor.md](docs/temp-sensor.md).
 
 Power: 20 V DC feeds the MP1584EN, whose ~2.4–14 V output supplies the fans
 (wired in parallel, tach from only one fan). The ESP32 board needs its own

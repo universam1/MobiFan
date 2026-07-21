@@ -20,9 +20,11 @@ constexpr float TEMP_EMA_ALPHA = 0.2f;     // smoothing, both temp sensors
 
 // ---------- DS18B20 (alternate temp sensor, see docs/temp-sensor.md) ----------
 // Built only when TEMP_SENSOR_DS18B20 is defined (env esp32c3-oled-ds18b20 in
-// platformio.ini). Wired normally powered: VDD->3.3V, GND->GND, DQ->GPIO
-// with a 4.7k pull-up to 3.3V. Swaps in for the NTC divider; Controller/
-// DisplayUi are unaware which sensor is active.
+// platformio.ini). Wired normally powered: VDD->3.3V, GND->GND, DQ->GPIO.
+// No external pull-up resistor: TempSensorDS18B20::begin() enables the C3's
+// internal weak pull-up on PIN_ONEWIRE instead (see docs/temp-sensor.md).
+// Swaps in for the NTC divider; Controller/DisplayUi are unaware which
+// sensor is active.
 #if defined(TEMP_SENSOR_DS18B20)
 constexpr int PIN_ONEWIRE = 4;   // ADC1-capable pin not otherwise used
 constexpr uint8_t  DS18B20_RESOLUTION_BITS = 11; // 0.125C steps, ~375ms conversion

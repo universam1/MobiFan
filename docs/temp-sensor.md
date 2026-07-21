@@ -28,30 +28,48 @@ tolerance (typically ±1–2°C uncalibrated). A DS18B20 trades a bit of
 response speed for a factory-trimmed ±0.5°C digital reading, at the cost of
 needing an extra library and a third wire (normal power, not parasite).
 
-## Wiring (DS18B20, normal power)
+## Wiring (DS18B20, normal power, no pull-up resistor)
 
-Three wires run to the sensor: VDD, GND, and DQ. Normal power was chosen
-over parasite power for reliability — it avoids the strong-pull-up/bus
-capacitance concerns parasite mode has during conversion, at the cost of
-one extra wire.
+Three wires run to the sensor: VDD, GND, and DQ — but no external pull-up.
+Normal power was chosen over parasite power for reliability (it avoids the
+strong-pull-up/bus-capacitance concerns parasite mode has during
+conversion), at the cost of one extra wire. The pull-up resistor is dropped
+in favor of the ESP32-C3's internal weak pull-up, following the technique
+from [bigjosh's "No external pull-up needed for DS18B20"
+writeup](https://wp.josh.com/2014/06/23/no-external-pull-up-needed-for-ds18b20-temp-sensor/)
+(and its [ESP8266 fork](https://github.com/bigjosh/OneWireNoResistor/tree/ESP8266)),
+adapted here without forking the OneWire library.
 
 ```
-            3.3V ----------------------+
-                     |                 |
-                    4.7k               VDD (DS18B20)
-                     |                 |
-GPIO4 (PIN_ONEWIRE) -+------ DQ  ------+
-                             GND -> GND
+GPIO4 (PIN_ONEWIRE) ------ DQ  (DS18B20)
+                            VDD -> 3.3V
+                            GND -> GND
 ```
 
 - `PIN_ONEWIRE` is GPIO4 (see [../src/config.h](../src/config.h)) — free in
   this project's pin map (GPIO3/5/6/7/9/10 are all already used; GPIO0–4 is
   the only usable ADC1 range on the C3, though this pin doesn't need ADC
   here, just headroom for future use).
-- Use a real 4.7 kΩ pull-up to 3.3 V, not just the internal weak pull-up.
+- `TempSensorDS18B20::begin()` calls `pinMode(PIN_ONEWIRE, INPUT_PULLUP)`
+  once, right after `OneWire`/`DallasTemperature` init (it has to come
+  *after*, since `OneWire::begin()` itself sets plain `INPUT`). This was
+  verified against this project's vendored `OneWire` library: on
+  `CONFIG_IDF_TARGET_ESP32C3` its `directModeInput`/`directModeOutput`
+  (used by every `reset()`/`read_bit()`/`write_bit()`) only toggle
+  `GPIO.enable_w1tc`/`w1ts` (the output-enable bit) and never touch the
+  pull-up/pull-down registers — so the pull-up set once at boot holds for
+  every future bus transaction without needing a patched library.
+- This relies on a single sensor and a short cable, matching the writeup's
+  own caveats: the internal pull-up is much weaker (tens of kΩ vs. 4.7 kΩ),
+  so its RC rise time budget is smaller. Longer wiring or multiple sensors
+  would eat that margin and are more likely to need the external resistor
+  back.
 - If you see intermittent `DEVICE_DISCONNECTED_C` reads (`tempValid() ==
-  false`, auto mode failing safe to 100%), check the VDD connection and
-  cable/connector quality first.
+  false`, auto mode failing safe to 100%), that's the first thing to
+  suspect. A 4.7 kΩ external pull-up to 3.3 V (added in parallel, doesn't
+  need code changes) is the fallback if the internal one isn't reliable
+  enough for your wiring.
+
 
 ## Why `tick()` polls instead of blocking
 

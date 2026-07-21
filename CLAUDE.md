@@ -90,7 +90,12 @@ tasks, no heap use after setup.
   library's blocking `requestTemperatures()` — never change it to block. Its
   `.cpp`/`.h` are wrapped in `#if defined(TEMP_SENSOR_DS18B20)` because
   PlatformIO builds every `src/*.cpp` regardless of `main.cpp`'s includes;
-  see [docs/temp-sensor.md](docs/temp-sensor.md).
+  see [docs/temp-sensor.md](docs/temp-sensor.md). No external pull-up
+  resistor: `begin()` enables the C3's internal weak pull-up on the DQ pin
+  instead — this only works because `OneWire::begin()` must run first (it
+  sets plain `INPUT`), and only holds on ESP32-C3 because that library's
+  direct-GPIO macros never touch pull config after boot (see the doc for
+  the verification).
 - C3 ADC quirks: only ADC1 (GPIO0–4) is usable (ADC2 is broken/reserved on
   the C3); readings above ~2500 mV are nonlinear garbage; always read via
   `analogReadMilliVolts` so the eFuse calibration is applied.
