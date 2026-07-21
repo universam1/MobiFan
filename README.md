@@ -1,7 +1,8 @@
 # MobiFan — Camper Van Fan Controller
 
 Controls one or more Thermaltake Pure 20 DC fans from an ESP32-C3 board with a
-0.42" OLED, using an NTC temperature sensor and a single button.
+0.42" OLED, using an NTC (or optional DS18B20) temperature sensor and a
+single button.
 
 Fan speed is controlled by varying the fan's **supply voltage**: a D-SUN
 MP1584EN buck module's output (~2.4–14 V from a 20 V input) is steered by the
@@ -47,12 +48,19 @@ calibration, and transfer function in
 | Buck FB PWM | 10 | push-pull → 1 kΩ + 1 µF filter → 30 kΩ into MP1584EN FB |
 | Fan tach | 7 | from one fan's sense wire; internal pull-up |
 | NTC | 3 | divider: 3.3 V → **NTC 100k/3950** → GPIO3 → 100 kΩ → GND |
+| DS18B20 (optional) | 4 | 1-Wire, normally powered, 4.7 kΩ pull-up to 3.3 V |
 
 **NTC orientation matters**: the NTC sits on the high side (to 3.3 V) because
 the ESP32-C3 ADC is only accurate up to ~2.5 V and saturates above. This way
 the node voltage rises with temperature and stays inside the accurate range
 for everything below ~52 °C, and an open sensor reads ~0 V (detectable fault
 → auto mode fails safe to 100%).
+
+**DS18B20 is a build-time alternative** to the NTC divider, selected via a
+PlatformIO env (`pio run -e esp32c3-oled-ds18b20`) — both sensors share the
+same interface so the rest of the firmware is unchanged either way. Wiring,
+rationale, and the non-blocking conversion polling are covered in
+[docs/temp-sensor.md](docs/temp-sensor.md).
 
 Power: 20 V DC feeds the MP1584EN, whose ~2.4–14 V output supplies the fans
 (wired in parallel, tach from only one fan). The ESP32 board needs its own
@@ -70,7 +78,15 @@ All pins and tunables live in [src/config.h](src/config.h).
 ## Build
 
 ```sh
-pio run                 # build
+pio run                 # build (default env: NTC sensor)
 pio run -t upload       # flash
 pio device monitor      # serial log (115200)
+```
+
+To build with the DS18B20 sensor instead, target its env explicitly (see
+[docs/temp-sensor.md](docs/temp-sensor.md)):
+
+```sh
+pio run -e esp32c3-oled-ds18b20
+pio run -e esp32c3-oled-ds18b20 -t upload
 ```

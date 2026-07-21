@@ -29,7 +29,7 @@ tasks, no heap use after setup.
 | Module | Responsibility |
 |---|---|
 | `Controller` | Mode/level state machine + fan power computation (the core logic) |
-| `TempSensor` | 1 Hz oversampled NTC read, Beta-3950 conversion, EMA smoothing |
+| `TempSensor` / `TempSensorDS18B20` | Temperature reading, EMA smoothing; two interchangeable implementations selected by PlatformIO env (see [docs/temp-sensor.md](docs/temp-sensor.md)) |
 | `FanControl` | power % → target volts → inverted FB-injection PWM (25 kHz LEDC) |
 | `Tach` | Interrupt pulse counting → RPM (2 pulses/rev) |
 | `ButtonInput` | Debounce + short/long press events |
@@ -54,8 +54,8 @@ tasks, no heap use after setup.
 - **Button**: short press cycles the level (manual 0→5→0, auto 1→5→1);
   long press ≥800 ms toggles manual↔auto. Manual and auto remember their
   levels independently.
-- **Fail safe**: if the NTC reads open/short (`tempValid == false`), auto mode
-  runs at 100%.
+- **Fail safe**: if the temp sensor reads invalid (`tempValid == false`, e.g.
+  NTC open/short or DS18B20 disconnected), auto mode runs at 100%.
 - **Stall warning**: duty > 0 but zero tach pulses for 5 s.
 - Every level or mode change must trigger the UI popup
   (`DisplayUi::showChangePopup`).
@@ -84,6 +84,13 @@ tasks, no heap use after setup.
   conversion in TempSensor.cpp assumes this orientation. **Do not flip it**:
   the C3 ADC saturates above ~2500 mV at 11 dB attenuation; NTC-on-top keeps
   all temps < ~52 °C in the accurate window and makes an open NTC read ~0 V.
+- **DS18B20 is a build-time swap-in** for the NTC (env `esp32c3-oled-ds18b20`,
+  GPIO4, normally powered, 11-bit resolution). `TempSensorDS18B20`'s `tick()`
+  polls a non-blocking conversion state machine rather than calling the
+  library's blocking `requestTemperatures()` — never change it to block. Its
+  `.cpp`/`.h` are wrapped in `#if defined(TEMP_SENSOR_DS18B20)` because
+  PlatformIO builds every `src/*.cpp` regardless of `main.cpp`'s includes;
+  see [docs/temp-sensor.md](docs/temp-sensor.md).
 - C3 ADC quirks: only ADC1 (GPIO0–4) is usable (ADC2 is broken/reserved on
   the C3); readings above ~2500 mV are nonlinear garbage; always read via
   `analogReadMilliVolts` so the eFuse calibration is applied.

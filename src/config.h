@@ -16,7 +16,18 @@ constexpr float NTC_R_FIXED   = 100000.0f; // series resistor to GND
 constexpr float NTC_R_NOMINAL = 100000.0f; // 100k at 25C
 constexpr float NTC_BETA      = 3950.0f;
 constexpr float NTC_T_NOMINAL = 25.0f;
-constexpr float TEMP_EMA_ALPHA = 0.2f;     // smoothing, sampled at 1 Hz
+constexpr float TEMP_EMA_ALPHA = 0.2f;     // smoothing, both temp sensors
+
+// ---------- DS18B20 (alternate temp sensor, see docs/temp-sensor.md) ----------
+// Built only when TEMP_SENSOR_DS18B20 is defined (env esp32c3-oled-ds18b20 in
+// platformio.ini). Wired normally powered: VDD->3.3V, GND->GND, DQ->GPIO
+// with a 4.7k pull-up to 3.3V. Swaps in for the NTC divider; Controller/
+// DisplayUi are unaware which sensor is active.
+#if defined(TEMP_SENSOR_DS18B20)
+constexpr int PIN_ONEWIRE = 4;   // ADC1-capable pin not otherwise used
+constexpr uint8_t  DS18B20_RESOLUTION_BITS = 11; // 0.125C steps, ~375ms conversion
+constexpr uint32_t DS18B20_CONVERSION_MS = 375;  // 11-bit resolution conversion time
+#endif
 
 // ---------- Buck converter (D-SUN MP1584EN, FB current injection) ----------
 // The fan (Thermaltake Pure 20, 3-pin DC) is speed-controlled by varying its

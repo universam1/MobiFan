@@ -1,13 +1,21 @@
 #include <Arduino.h>
 #include "config.h"
+#if defined(TEMP_SENSOR_DS18B20)
+#include "TempSensorDS18B20.h"
+#else
 #include "TempSensor.h"
+#endif
 #include "FanControl.h"
 #include "Tach.h"
 #include "ButtonInput.h"
 #include "Controller.h"
 #include "DisplayUi.h"
 
+#if defined(TEMP_SENSOR_DS18B20)
+static TempSensorDS18B20 tempSensor;
+#else
 static TempSensor tempSensor;
+#endif
 static FanControl fan;
 static Tach tach;
 static ButtonInput button;
