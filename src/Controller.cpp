@@ -16,13 +16,13 @@ bool Controller::handleButton(ButtonEvent ev) {
   return false;
 }
 
-float Controller::computeDutyPercent(float tempC, bool tempValid) const {
-  if (_mode == Mode::Manual) return MANUAL_DUTY_PCT[_manualLevel];
+float Controller::computePowerPercent(float tempC, bool tempValid) const {
+  if (_mode == Mode::Manual) return MANUAL_POWER_PCT[_manualLevel];
   // Auto with a broken sensor: fail safe to full power.
   if (!tempValid) return 100.0f;
   float tMax = autoRampMaxTempC(_autoLevel);
-  if (tempC <= AUTO_BASE_TEMP_C) return FAN_MIN_DUTY_PCT;
+  if (tempC <= AUTO_BASE_TEMP_C) return FAN_MIN_POWER_PCT;
   if (tempC >= tMax) return 100.0f;
   float frac = (tempC - AUTO_BASE_TEMP_C) / (tMax - AUTO_BASE_TEMP_C);
-  return FAN_MIN_DUTY_PCT + frac * (100.0f - FAN_MIN_DUTY_PCT);
+  return FAN_MIN_POWER_PCT + frac * (100.0f - FAN_MIN_POWER_PCT);
 }

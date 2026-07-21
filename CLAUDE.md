@@ -1,8 +1,11 @@
 # MobiFan — Camper Van Fan Controller
 
 PlatformIO (Arduino framework) firmware for an ESP32-C3 0.42" OLED board that
-controls 1–2 Noctua NF-A20 5V PWM fans based on an NTC 100k/3950 temperature
-sensor, operated with a single button.
+controls 1–2 Thermaltake Pure 20 DC fans based on an NTC 100k/3950 temperature
+sensor, operated with a single button. Fan speed is set by varying the fan's
+supply voltage: an MP1584EN buck converter whose output the ESP32 steers by
+PWM current injection into its FB pin — see
+[docs/buck-fb-control.md](docs/buck-fb-control.md).
 
 ## Build & flash
 
@@ -24,9 +27,9 @@ tasks, no heap use after setup.
 
 | Module | Responsibility |
 |---|---|
-| `Controller` | Mode/level state machine + duty computation (the core logic) |
+| `Controller` | Mode/level state machine + fan power computation (the core logic) |
 | `TempSensor` | 1 Hz oversampled NTC read, Beta-3950 conversion, EMA smoothing |
-| `FanControl` | 25 kHz LEDC PWM, open-drain output |
+| `FanControl` | power % → target volts → inverted FB-injection PWM (25 kHz LEDC) |
 | `Tach` | Interrupt pulse counting → RPM (2 pulses/rev) |
 | `ButtonInput` | Debounce + short/long press events |
 | `DisplayUi` | U8g2 rendering: main screen + change popup (see ASCII previews in DisplayUi.h) |
@@ -38,9 +41,13 @@ tasks, no heap use after setup.
 
 - **Boot state**: auto mode, ramp level 3. Nothing is persisted (no NVS) — by design.
 - **Auto mode is a ramp selector**, not a temp→level lookup: levels 1–5 pick a
-  linear ramp from `FAN_MIN_DUTY_PCT` (20%) at ≤15 °C to 100% at 40/35/30/25/20 °C
+  linear ramp from `FAN_MIN_POWER_PCT` (20%) at ≤15 °C to 100% at 40/35/30/25/20 °C
   respectively. Auto never turns the fan fully off.
-- **Manual mode**: levels 0–5 = fixed duties 0/20/40/60/80/100%.
+- **Manual mode**: levels 0–5 = fixed power 0/20/40/60/80/100%.
+- **Power → voltage**: everything outside `FanControl` deals in fan power %
+  only. `FanControl` maps power >0 linearly onto `FAN_V_MIN`..`FAN_V_MAX`
+  (4.5–12 V) and power 0 to `BUCK_VOUT_MIN` (~3.2 V, fan stops — there is no
+  true off).
 - **Button**: short press cycles the level (manual 0→5→0, auto 1→5→1);
   long press ≥800 ms toggles manual↔auto. Manual and auto remember their
   levels independently.
@@ -52,10 +59,14 @@ tasks, no heap use after setup.
 
 ## Hardware constraints
 
-- Fan PWM (GPIO10) is **open-drain on purpose** — the Noctua PWM line has an
-  internal pull-up to 5 V; pushing 3.3 V push-pull would fight it. Keep the
-  `gpio_set_direction(..., GPIO_MODE_OUTPUT_OD)` call after `ledcAttachPin`.
-- PWM must stay at 25 kHz (Intel 4-pin fan spec); audible whine below ~21 kHz.
+- The buck PWM (GPIO10) drives an RC filter into the MP1584EN FB node and is
+  **inverted**: 0% duty ≈ 14 V out, 100% duty ≈ 3.1 V out. It must be
+  **push-pull** (never open-drain — the pin has to source and sink), and the
+  frequency must stay within 20–50 kHz so the 1k/1µF filter output is smooth.
+- **Boot transient**: with the GPIO high-Z (before `fan.begin()`), the buck
+  outputs ~14 V. `fan.begin()` must remain the first call in `setup()`.
+- All the inversion math is contained in `FanControl::applyVolts()` — never
+  spread duty-cycle inversion into other modules.
 - NTC divider: 3.3 V → NTC → GPIO3 (ADC) → 100 kΩ fixed → GND. The ADC reads
   the voltage **across the fixed resistor** (rises with temperature) — the
   conversion in TempSensor.cpp assumes this orientation. **Do not flip it**:
