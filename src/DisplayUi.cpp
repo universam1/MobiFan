@@ -18,14 +18,15 @@ void DisplayUi::showChangePopup(Mode mode, uint8_t level, uint32_t now) {
 }
 
 void DisplayUi::tick(uint32_t now, float tempC, bool tempValid, Mode mode,
-                     uint8_t level, float powerPct, uint32_t rpm, bool stalled) {
+                     uint8_t level, float powerPct, float volts, uint32_t rpm,
+                     bool stalled) {
   if (now - _lastDraw < 100) return; // ~10 Hz
   _lastDraw = now;
   u8g2.clearBuffer();
   if (now < _popupUntil)
     drawPopup();
   else
-    drawMain(tempC, tempValid, mode, level, powerPct, rpm, stalled);
+    drawMain(tempC, tempValid, mode, level, powerPct, volts, rpm, stalled);
   u8g2.sendBuffer();
 }
 
@@ -51,10 +52,11 @@ void DisplayUi::drawPopup() {
 // +--------------------------+
 // |  24.3°              A3   |  y=16: temp logisoso16 left, mode+level right
 // |  [#########_______]      |  y=21..29: power bar = live fan power
-// |  1450rpm            64%  |  y=39: rpm left, power% right (5x8 font);
+// |  1450rpm           9.5V  |  y=39: rpm left, fan DC volts right (5x8);
 // +--------------------------+        replaced by "! FAN STALL !" on stall
 void DisplayUi::drawMain(float tempC, bool tempValid, Mode mode, uint8_t level,
-                         float powerPct, uint32_t rpm, bool stalled) {
+                         float powerPct, float volts, uint32_t rpm,
+                         bool stalled) {
   // Temperature, large
   char buf[16];
   if (tempValid)
@@ -73,14 +75,14 @@ void DisplayUi::drawMain(float tempC, bool tempValid, Mode mode, uint8_t level,
   u8g2.drawFrame(0, 21, 72, 8);
   u8g2.drawBox(1, 22, (uint8_t)(70.0f * powerPct / 100.0f), 6);
 
-  // Bottom line: stall warning or RPM + power
+  // Bottom line: stall warning or RPM + fan supply voltage
   u8g2.setFont(u8g2_font_5x8_tr);
   if (stalled) {
     u8g2.drawStr(0, 39, "! FAN STALL !");
   } else {
     snprintf(buf, sizeof(buf), "%urpm", (unsigned)rpm);
     u8g2.drawStr(0, 39, buf);
-    snprintf(buf, sizeof(buf), "%d%%", (int)(powerPct + 0.5f));
+    snprintf(buf, sizeof(buf), "%.1fV", volts);
     u8g2.drawStr(72 - u8g2.getStrWidth(buf), 39, buf);
   }
 }

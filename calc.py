@@ -1,7 +1,8 @@
-R_top = 100000.0   # 100k
-R_bottom = 7500.0  # 7.5k
-R_pwm = 30000.0    # 30k
 V_fb = 0.8
+V_cal = 12.0                              # pot-set anchor (zero injection)
+R_bottom = 8200.0                         # onboard on D-SUN module
+R_top = (V_cal - V_fb) * R_bottom / V_fb  # effective pot position, ~135.3k
+R_pwm = 30000.0                           # external summing resistor
 
 def calc_vout(v_pwm):
     current_bottom = V_fb / R_bottom

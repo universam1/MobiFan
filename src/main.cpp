@@ -47,7 +47,7 @@ void loop() {
   stalled = (now - spinningSince) > STALL_TIMEOUT_MS;
 
   ui.tick(now, tempSensor.celsius(), tempSensor.valid(), controller.mode(),
-          controller.level(), power, tach.rpm(), stalled);
+          controller.level(), power, fan.targetVolts(), tach.rpm(), stalled);
 
   if (now - lastLog >= 2000) {
     lastLog = now;

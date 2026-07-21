@@ -3,10 +3,14 @@
 Controls one or more Thermaltake Pure 20 DC fans from an ESP32-C3 board with a
 0.42" OLED, using an NTC temperature sensor and a single button.
 
-Fan speed is controlled by varying the fan's **supply voltage**: an MP1584EN
-buck converter's output (3–14 V from a 20 V input) is steered by the ESP32
-via PWM current injection into the converter's feedback pin — concept,
-schematic, and transfer function in
+Fan speed is controlled by varying the fan's **supply voltage**: a D-SUN
+MP1584EN buck module's output (~2.4–14 V from a 20 V input) is steered by the
+ESP32 via bidirectional PWM current injection into the converter's feedback
+pin. The module's onboard trim pot stays in place and is calibrated to 12.0 V
+— the *anchor* the fan sees at boot or if the firmware dies — while sinking
+FB current lets the firmware command up to 14 V. Only a 30 kΩ summing
+resistor and a 1k/1µF RC filter are added externally — concept, schematic,
+calibration, and transfer function in
 [docs/buck-fb-control.md](docs/buck-fb-control.md).
 
 ## Behavior
@@ -27,9 +31,10 @@ schematic, and transfer function in
   | 5 | 20 °C |
 
   If the NTC reads open/short, auto mode fails safe to 100%.
-- Fan power maps to supply voltage: 20–100% → 6–12 V (`FAN_V_MIN`/`FAN_V_MAX`);
-  power 0 drops the buck to ~3.2 V, which stops the fan (there is no true off).
-- **Display**: temperature, mode+level (`A3`/`M2`), live power bar, RPM.
+- Fan power maps to supply voltage: >0–100% → 4.5–14 V (`FAN_V_MIN`/`FAN_V_MAX`);
+  power 0 drops the buck to 3.2 V, which stops the fan (there is no true off).
+- **Display**: temperature, mode+level (`A3`/`M2`), live power bar, RPM, and
+  the fan's DC output voltage.
   Any level or mode change shows a full-screen popup for 1.5 s.
   A commanded-on fan with no tach pulses for 5 s shows `! FAN STALL !`.
 
@@ -49,11 +54,16 @@ the node voltage rises with temperature and stays inside the accurate range
 for everything below ~52 °C, and an open sensor reads ~0 V (detectable fault
 → auto mode fails safe to 100%).
 
-Power: 20 V DC feeds the MP1584EN, whose 3–14 V output supplies the fans
+Power: 20 V DC feeds the MP1584EN, whose ~2.4–14 V output supplies the fans
 (wired in parallel, tach from only one fan). The ESP32 board needs its own
-fixed 5 V supply — the fan rail varies and cannot power it. **Boot note**:
-until the firmware starts its PWM, the buck outputs its maximum (~14 V);
-the fans see this brief transient at every power-up.
+fixed 5 V supply — the fan rail varies and cannot power it.
+
+**Calibration**: with the GPIO floating (R_PWM injecting nothing), set the
+module's onboard pot to **12.0 V**. That pot setting is the anchor: what the
+fans see at boot (and in any firmware-dead state) — deliberately the fan's
+rated voltage. The 14 V maximum is reached by the firmware sinking FB
+current (~8% duty). If your measured anchor differs, adjust `BUCK_VOUT_CAL`
+in [src/config.h](src/config.h).
 
 All pins and tunables live in [src/config.h](src/config.h).
 

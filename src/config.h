@@ -18,23 +18,34 @@ constexpr float NTC_BETA      = 3950.0f;
 constexpr float NTC_T_NOMINAL = 25.0f;
 constexpr float TEMP_EMA_ALPHA = 0.2f;     // smoothing, sampled at 1 Hz
 
-// ---------- Buck converter (MP1584EN, FB current injection) ----------
+// ---------- Buck converter (D-SUN MP1584EN, FB current injection) ----------
 // The fan (Thermaltake Pure 20, 3-pin DC) is speed-controlled by varying its
 // supply voltage. The ESP32 PWMs into the buck's FB node through an RC filter
 // + summing resistor; the mapping is INVERTED (high duty -> low Vout).
+// The module's ONBOARD trim pot (Vout->FB) and onboard 8.2k pull-down are
+// kept; only R_PWM + the RC filter are external. The pot is calibrated so
+// Vout = BUCK_VOUT_CAL with the PWM idle/high-Z (zero injection). Injection
+// is BIDIRECTIONAL around that anchor: duty above ~24% sources current into
+// FB (Vout drops below the anchor), duty below ~24% sinks current (Vout
+// rises above it). The anchor is deliberately the fan's rated 12 V — it is
+// what the fan sees at boot and if the firmware ever dies — while the 14 V
+// maximum is only reached on command (~8% duty).
 constexpr uint32_t BUCK_PWM_FREQ_HZ = 25000; // keep 20-50 kHz for low ripple after RC
 constexpr uint8_t  BUCK_PWM_RES_BITS = 10;
 constexpr float BUCK_VREF     = 0.8f;      // MP1584EN internal FB reference
-constexpr float BUCK_R_TOP    = 100000.0f; // Vout -> FB
-constexpr float BUCK_R_BOTTOM = 7500.0f;   // FB -> GND
-constexpr float BUCK_R_PWM    = 30000.0f;  // filter output -> FB (summing)
+constexpr float BUCK_VOUT_CAL = 12.0f;     // pot-set Vout at zero injection (measure!)
+constexpr float BUCK_R_BOTTOM = 8200.0f;   // FB -> GND (onboard on D-SUN module)
+constexpr float BUCK_R_TOP    =            // effective pot position, derived (~115k)
+    (BUCK_VOUT_CAL - BUCK_VREF) * BUCK_R_BOTTOM / BUCK_VREF;
+constexpr float BUCK_R_PWM    = 30000.0f;  // filter output -> FB (summing, 1%)
 constexpr float BUCK_LOGIC_V  = 3.3f;      // PWM high level after RC filter
-constexpr float BUCK_VOUT_MIN = 3.2f;      // lowest reachable Vout (100% duty)
-constexpr float BUCK_VOUT_MAX = 14.0f;     // highest reachable Vout (0% duty / boot!)
+constexpr float BUCK_VOUT_MIN = 3.2f;      // fan-stop voltage (floor is ~2.4V at 100% duty)
+constexpr float BUCK_VOUT_MAX = 14.0f;     // reached by sinking FB current (~8% duty;
+                                           // physical headroom ends ~15.1V at 0%)
 
 // ---------- Fan (voltage-controlled DC) ----------
 constexpr float FAN_V_MIN = 4.5f;  // volts at power >0..low end (tune: must spin)
-constexpr float FAN_V_MAX = 12.0f; // volts at 100% power (fan's rated voltage)
+constexpr float FAN_V_MAX = 14.0f; // volts at 100% power
 constexpr float FAN_MIN_POWER_PCT = 20.0f; // auto-mode floor (never off)
 // Manual levels 0..5 -> power %  (0 = buck at BUCK_VOUT_MIN, fan stops)
 constexpr float MANUAL_POWER_PCT[6] = {0, 20, 40, 60, 80, 100};
