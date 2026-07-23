@@ -40,7 +40,7 @@ tasks, no heap use after setup.
 
 ## Domain rules (do not break these)
 
-- **Boot state**: auto mode, ramp level 3. Nothing is persisted (no NVS) — by design.
+- **Boot state**: manual mode, level 3. Nothing is persisted (no NVS) — by design.
 - **Auto mode is a ramp selector**, not a temp→level lookup: levels 1–5 pick a
   linear ramp from `FAN_MIN_POWER_PCT` (20%) at ≤15 °C to 100% at 40/35/30/25/20 °C
   respectively. Auto never turns the fan fully off.
@@ -89,18 +89,19 @@ tasks, no heap use after setup.
   conversion in TempSensor.cpp assumes this orientation. **Do not flip it**:
   the C3 ADC saturates above ~2500 mV at 11 dB attenuation; NTC-on-top keeps
   all temps < ~52 °C in the accurate window and makes an open NTC read ~0 V.
-- **DS18B20 is a build-time swap-in** for the NTC (env `esp32c3-oled-ds18b20`,
-  GPIO4, normally powered, 11-bit resolution). `TempSensorDS18B20`'s `tick()`
-  polls a non-blocking conversion state machine rather than calling the
-  library's blocking `requestTemperatures()` — never change it to block. Its
+- **DS18B20 is the current hardware sensor** (env `esp32c3-oled-ds18b20`,
+  the `default_envs`; GPIO4, normally powered, external 4.7 kΩ pull-up to
+  3.3 V on DQ, 11-bit resolution). `TempSensorDS18B20`'s `tick()` polls a
+  non-blocking conversion state machine rather than calling the library's
+  blocking `requestTemperatures()` — never change it to block. Its
   `.cpp`/`.h` are wrapped in `#if defined(TEMP_SENSOR_DS18B20)` because
   PlatformIO builds every `src/*.cpp` regardless of `main.cpp`'s includes;
-  see [docs/temp-sensor.md](docs/temp-sensor.md). No external pull-up
-  resistor: `begin()` enables the C3's internal weak pull-up on the DQ pin
-  instead — this only works because `OneWire::begin()` must run first (it
-  sets plain `INPUT`), and only holds on ESP32-C3 because that library's
-  direct-GPIO macros never touch pull config after boot (see the doc for
-  the verification).
+  see [docs/temp-sensor.md](docs/temp-sensor.md). The plain NTC divider
+  (env `esp32c3-oled`) remains as a build-time alternative.
+- **OLED panel alignment is per-board-tuned**: `OLED_X_OFFSET`/`OLED_Y_OFFSET`
+  in config.h override u8g2's built-in offsets for this exact 72x40 SSD1306
+  clone (whose glass window doesn't line up with u8g2's stock assumption);
+  see the comment there before touching `DisplayUi`'s constructor/init.
 - C3 ADC quirks: only ADC1 (GPIO0–4) is usable (ADC2 is broken/reserved on
   the C3); readings above ~2500 mV are nonlinear garbage; always read via
   `analogReadMilliVolts` so the eFuse calibration is applied.

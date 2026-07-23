@@ -8,6 +8,10 @@ static U8G2_SSD1306_72X40_ER_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE,
 void DisplayUi::begin() {
   u8g2.begin();
   u8g2.setContrast(255);
+  // Nudge the panel alignment for this specific (clone) glass — see the
+  // comment on OLED_X_OFFSET/OLED_Y_OFFSET in config.h.
+  u8g2.getU8x8()->x_offset = OLED_X_OFFSET;
+  u8g2.sendF("ca", 0x0d3, OLED_Y_OFFSET); // SSD1306 "Set Display Offset"
 }
 
 void DisplayUi::showChangePopup(Mode mode, uint8_t level, uint32_t now) {
@@ -52,8 +56,8 @@ void DisplayUi::drawPopup() {
 // +--------------------------+
 // |  24.3°              A3   |  y=16: temp logisoso16 left, mode+level right
 // |  [#########_______]      |  y=21..29: power bar = live fan power
-// |  1450rpm           9.5V  |  y=39: rpm left, fan DC volts right (5x8);
-// +--------------------------+        replaced by "! FAN STALL !" on stall
+// |  1450rpm           9.5V  |  y=39: rpm left, fan DC volts right (6x10);
+// +--------------------------+        replaced by "FAN STALL!" on stall
 void DisplayUi::drawMain(float tempC, bool tempValid, Mode mode, uint8_t level,
                          float powerPct, float volts, uint32_t rpm,
                          bool stalled) {
@@ -76,9 +80,10 @@ void DisplayUi::drawMain(float tempC, bool tempValid, Mode mode, uint8_t level,
   u8g2.drawBox(1, 22, (uint8_t)(70.0f * powerPct / 100.0f), 6);
 
   // Bottom line: stall warning or RPM + fan supply voltage
-  u8g2.setFont(u8g2_font_5x8_tr);
+  u8g2.setFont(u8g2_font_6x10_tr);
   if (stalled) {
-    u8g2.drawStr(0, 39, "! FAN STALL !");
+    const char* warn = "FAN STALL!";
+    u8g2.drawStr((72 - u8g2.getStrWidth(warn)) / 2, 39, warn);
   } else {
     snprintf(buf, sizeof(buf), "%urpm", (unsigned)rpm);
     u8g2.drawStr(0, 39, buf);

@@ -1,7 +1,7 @@
 # MobiFan — Camper Van Fan Controller
 
 Controls one or more Thermaltake Pure 20 DC fans from an ESP32-C3 board with a
-0.42" OLED, using an NTC (or optional DS18B20) temperature sensor and a
+0.42" OLED, using a DS18B20 (or optional NTC) temperature sensor and a
 single button.
 
 Fan speed is controlled by varying the fan's **supply voltage**: an XL6009E1
@@ -16,7 +16,7 @@ calibration, and transfer function in
 
 ## Behavior
 
-- **Boot**: auto mode, ramp level 3. Nothing is persisted.
+- **Boot**: manual mode, level 3. Nothing is persisted.
 - **Short press**: manual mode cycles level 0→5→0 (fixed power 0/20/40/60/80/100%);
   auto mode cycles ramp 1→5→1 (auto never turns the fan off).
 - **Long press (≥0.8 s)**: toggles manual ↔ auto.
@@ -31,7 +31,7 @@ calibration, and transfer function in
   | 4 | 25 °C |
   | 5 | 20 °C |
 
-  If the NTC reads open/short, auto mode fails safe to 100%.
+  If the temp sensor reads invalid, auto mode fails safe to 100%.
 - Fan power maps to supply voltage: >0–100% → 5.5–14 V (`FAN_V_MIN`/`FAN_V_MAX`);
   power 0 drops the boost to the same 5.5 V floor (`BOOST_VOUT_MIN`) — a
   boost can't go lower than its own ~5 V input, so the fan never fully stops
@@ -49,8 +49,8 @@ calibration, and transfer function in
 | Button | 9 | onboard BOOT button, active low |
 | Boost FB PWM | 10 | push-pull → 330 Ω + 4.7 µF filter → 390 Ω into XL6009E1 FB |
 | Fan tach | 7 | from one fan's sense wire; internal pull-up |
-| NTC | 3 | divider: 3.3 V → **NTC 100k/3950** → GPIO3 → 100 kΩ → GND |
-| DS18B20 (optional) | 4 | 1-Wire, normally powered, no external pull-up (uses the C3's internal weak pull-up) |
+| DS18B20 | 4 | 1-Wire, normally powered, external 4.7 kΩ pull-up to 3.3 V |
+| NTC (optional alt.) | 3 | divider: 3.3 V → **NTC 100k/3950** → GPIO3 → 100 kΩ → GND |
 
 **NTC orientation matters**: the NTC sits on the high side (to 3.3 V) because
 the ESP32-C3 ADC is only accurate up to ~2.5 V and saturates above. This way
@@ -58,12 +58,12 @@ the node voltage rises with temperature and stays inside the accurate range
 for everything below ~52 °C, and an open sensor reads ~0 V (detectable fault
 → auto mode fails safe to 100%).
 
-**DS18B20 is a build-time alternative** to the NTC divider, selected via a
-PlatformIO env (`pio run -e esp32c3-oled-ds18b20`) — both sensors share the
-same interface so the rest of the firmware is unchanged either way. No
-external pull-up resistor is needed (the firmware enables the C3's internal
-weak pull-up instead). Wiring, rationale, and the non-blocking conversion
-polling are covered in [docs/temp-sensor.md](docs/temp-sensor.md).
+**DS18B20 is the default sensor** (env `esp32c3-oled-ds18b20`, PlatformIO's
+`default_envs`), wired with an external 4.7 kΩ pull-up from DQ to 3.3 V. The
+plain NTC divider (env `esp32c3-oled`) remains available as a build-time
+alternative — both sensors share the same interface so the rest of the
+firmware is unchanged either way. Wiring, rationale, and the non-blocking
+conversion polling are covered in [docs/temp-sensor.md](docs/temp-sensor.md).
 
 Power: 5 V USB feeds the XL6009E1, whose ~5.5–14 V output supplies the fans
 (wired in parallel, tach from only one fan). The ESP32 board needs its own
@@ -81,15 +81,15 @@ All pins and tunables live in [src/config.h](src/config.h).
 ## Build
 
 ```sh
-pio run                 # build (default env: NTC sensor)
+pio run                 # build (default env: DS18B20 sensor)
 pio run -t upload       # flash
 pio device monitor      # serial log (115200)
 ```
 
-To build with the DS18B20 sensor instead, target its env explicitly (see
+To build with the plain NTC divider instead, target its env explicitly (see
 [docs/temp-sensor.md](docs/temp-sensor.md)):
 
 ```sh
-pio run -e esp32c3-oled-ds18b20
-pio run -e esp32c3-oled-ds18b20 -t upload
+pio run -e esp32c3-oled
+pio run -e esp32c3-oled -t upload
 ```

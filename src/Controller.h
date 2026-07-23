@@ -20,7 +20,7 @@ public:
   uint8_t level() const { return _mode == Mode::Auto ? _autoLevel : _manualLevel; }
 
 private:
-  Mode _mode = Mode::Auto;
-  uint8_t _manualLevel = 0;
+  Mode _mode = Mode::Manual;
+  uint8_t _manualLevel = BOOT_MANUAL_LEVEL;
   uint8_t _autoLevel = BOOT_AUTO_LEVEL;
 };

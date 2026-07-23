@@ -6,14 +6,6 @@ void TempSensorDS18B20::begin() {
   _sensors.begin();
   _sensors.setResolution(DS18B20_RESOLUTION_BITS);
 
-  // No external pull-up resistor: rely on the C3's internal weak pull-up
-  // instead (see docs/temp-sensor.md). OneWire::begin() (called from the
-  // _oneWire constructor, above) leaves the pin as plain INPUT, so this has
-  // to be set *after* that. On ESP32-C3, OneWire's read/write/reset only
-  // ever toggle the GPIO output-enable bit (GPIO.enable_w1tc/w1ts) and never
-  // touch the pull configuration, so this sticks for the module's lifetime.
-  pinMode(PIN_ONEWIRE, INPUT_PULLUP);
-
   // One blocking conversion so the UI has a valid reading immediately at
   // boot (mirrors TempSensor::begin's synchronous first read). Every
   // subsequent read goes through the non-blocking poll in tick().
