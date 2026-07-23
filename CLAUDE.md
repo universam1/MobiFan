@@ -92,9 +92,15 @@ tasks, no heap use after setup.
 - **DS18B20 is the current hardware sensor** (env `esp32c3-oled-ds18b20`,
   the `default_envs`; GPIO4, normally powered, external 4.7 kΩ pull-up to
   3.3 V on DQ, 11-bit resolution). `TempSensorDS18B20`'s `tick()` polls a
-  non-blocking conversion state machine rather than calling the library's
-  blocking `requestTemperatures()` — never change it to block. Its
-  `.cpp`/`.h` are wrapped in `#if defined(TEMP_SENSOR_DS18B20)` because
+  non-blocking conversion state machine — never make it block. It talks
+  to the sensor with raw `OneWire` commands via **Skip ROM (`0xCC`)**, not
+  `DallasTemperature`/address search: this specific (clone) chip has a
+  genuinely invalid factory ROM CRC (confirmed by on-device debugging —
+  family byte and scratchpad CRC are fine, only the ROM address CRC fails,
+  a known clone-chip defect), so ROM addressing never works no matter the
+  bus quality. Skip ROM sidesteps that, but only works because it's a
+  single-device bus — don't add a second DS18B20 without revisiting this.
+  Its `.cpp`/`.h` are wrapped in `#if defined(TEMP_SENSOR_DS18B20)` because
   PlatformIO builds every `src/*.cpp` regardless of `main.cpp`'s includes;
   see [docs/temp-sensor.md](docs/temp-sensor.md). The plain NTC divider
   (env `esp32c3-oled`) remains as a build-time alternative.

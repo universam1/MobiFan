@@ -50,28 +50,51 @@ GPIO4 (PIN_ONEWIRE) ------+----- DQ  (DS18B20)
   this project's pin map (GPIO3/5/6/7/9/10 are all already used; GPIO0–4 is
   the only usable ADC1 range on the C3, though this pin doesn't need ADC
   here, just headroom for future use).
-- With the external pull-up in place, `TempSensorDS18B20::begin()` doesn't
-  need to enable the C3's internal weak pull-up — `OneWire::begin()` leaves
-  the pin as plain `INPUT`, which is sufficient once the external resistor
-  is present.
+- With the external pull-up in place, the sensor's presence pulse and
+  scratchpad reads are solid — see the ROM addressing note below for the
+  one real defect found on this hardware.
 - If you see intermittent `DEVICE_DISCONNECTED_C` reads (`tempValid() ==
   false`, auto mode failing safe to 100%), check the pull-up resistor and
   wiring first.
 
+## Talks via Skip ROM, not address search — this sensor's ROM CRC is bad
+
+`TempSensorDS18B20` doesn't use the `DallasTemperature` library or
+address-based `OneWire::search()`/`getDeviceCount()` at all (and
+`milesburton/DallasTemperature` was removed from `lib_deps` accordingly).
+It talks directly to the bus with raw commands, always addressed via
+**Skip ROM (`0xCC`)**.
+
+This is a deliberate workaround for a real hardware defect, found by active
+on-device debugging: this specific (cheap/clone) DS18B20's factory-lasered
+64-bit ROM address has a **genuinely invalid CRC**. `OneWire::reset()`
+correctly reports a presence pulse and a raw `search()` finds a ROM with
+the right family byte (`0x28`), but its CRC8 never checks out — even after
+trying extra pull-up strength, the exact same (bad) ROM bytes come back
+every time, ruling out a signal-integrity/timing cause. A direct Skip-ROM
+read of the scratchpad, however, comes back with a **valid scratchpad CRC**
+and a sane temperature — i.e. conversion and the temperature/scratchpad
+CRC are fine, only the ROM CRC is bad. This is a known failure mode of
+counterfeit DS18B20 chips. Since Skip ROM never needs a valid address, it
+sidesteps the defect entirely — but it only works because this bus has
+exactly one device; adding a second sensor would require a genuine
+family-correct, CRC-valid part (or per-device wiring) to address them
+individually.
 
 ## Why `tick()` polls instead of blocking
 
 A DS18B20 conversion takes ~375 ms at the 11-bit resolution this firmware
 requests (`DS18B20_RESOLUTION_BITS` in [../src/config.h](../src/config.h)
 — 0.125°C steps, plenty for fan control and faster than the default 12-bit/
-750 ms). Per [../CLAUDE.md](../CLAUDE.md), no module may block the main
-loop, so `TempSensorDS18B20` never calls the library's blocking
-`requestTemperatures()` from `tick()`. Instead it's a small state machine:
+750 ms), set once in `begin()` via a Skip-ROM Write Scratchpad command. Per
+[../CLAUDE.md](../CLAUDE.md), no module may block the main loop, so
+`TempSensorDS18B20` never blocks on a conversion from `tick()`. Instead
+it's a small state machine:
 
-1. **Idle**: once per second, issue `requestTemperatures()` (non-blocking —
-   `setWaitForConversion(false)`) and note the start time.
-2. **Converting**: once `DS18B20_CONVERSION_MS` (375 ms) has elapsed, read
-   the result and go back to Idle.
+1. **Idle**: once per second, issue a Skip-ROM Convert T (`0x44`) and note
+   the start time.
+2. **Converting**: once `DS18B20_CONVERSION_MS` (375 ms) has elapsed, issue
+   a Skip-ROM Read Scratchpad (`0xBE`), check its CRC, and go back to Idle.
 
 `begin()` is the one exception: it does a single blocking conversion so a
 valid temperature is available immediately at boot, mirroring
