@@ -7,11 +7,12 @@ static U8G2_SSD1306_72X40_ER_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE,
 
 void DisplayUi::begin() {
   u8g2.begin();
-  u8g2.setContrast(255);
+  u8g2.setBusClock(400000);  //400kHz I2C
   // Nudge the panel alignment for this specific (clone) glass — see the
   // comment on OLED_X_OFFSET/OLED_Y_OFFSET in config.h.
   u8g2.getU8x8()->x_offset = OLED_X_OFFSET;
   u8g2.sendF("ca", 0x0d3, OLED_Y_OFFSET); // SSD1306 "Set Display Offset"
+  u8g2.setContrast(255);     // set contrast to maximum
 }
 
 void DisplayUi::showChangePopup(Mode mode, uint8_t level, uint32_t now) {
