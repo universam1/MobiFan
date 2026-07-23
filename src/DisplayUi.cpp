@@ -66,8 +66,8 @@ void DisplayUi::drawPopup() {
 // +--------------------------+
 // |  24.3°              A3   |  y=16: temp logisoso16 left, mode+level right
 // |  [#########_______]      |  y=21..29: power bar = live fan power
-// |  1450RPM           9.5V  |  y=39: rpm left, fan DC volts right (6x13);
-// +--------------------------+        replaced by "FAN STALL!" on stall
+// |  1450 rpm          9.5V  |  y=39: rpm (big, small unit) left, volts
+// +--------------------------+        (big) right; replaced by "FAN STALL!"
 void DisplayUi::drawMain(float tempC, bool tempValid, Mode mode, uint8_t level,
                          float powerPct, float volts, uint32_t rpm,
                          bool stalled) {
@@ -89,16 +89,21 @@ void DisplayUi::drawMain(float tempC, bool tempValid, Mode mode, uint8_t level,
   u8g2.drawFrame(0, 21, 72, 8);
   u8g2.drawBox(1, 22, (uint8_t)(70.0f * powerPct / 100.0f), 6);
 
-  // Bottom line: stall warning or RPM + fan supply voltage. 6x13 (not 10)
-  // for readability on this tiny panel; RPM is spelled uppercase (not
-  // "rpm") so no glyph has a descender to clip against the power bar above.
-  u8g2.setFont(u8g2_font_6x13_tr);
+  // Bottom line: stall warning or RPM + fan supply voltage. Numbers are
+  // 7x14B (up from 6x13) for legibility; the "RPM" unit is a small
+  // subscript so the digits stay this big without overflowing 72px wide.
+  u8g2.setFont(u8g2_font_7x14B_tr);
   if (stalled) {
     const char* warn = "FAN STALL!";
     u8g2.drawStr((72 - u8g2.getStrWidth(warn)) / 2, 39, warn);
   } else {
-    snprintf(buf, sizeof(buf), "%uRPM", (unsigned)rpm);
+    snprintf(buf, sizeof(buf), "%u", (unsigned)rpm);
     u8g2.drawStr(0, 39, buf);
+    uint8_t x = u8g2.getStrWidth(buf);
+    u8g2.setFont(u8g2_font_4x6_tr);
+    u8g2.drawStr(x + 2, 39, "RPM");
+
+    u8g2.setFont(u8g2_font_7x14B_tr);
     snprintf(buf, sizeof(buf), "%.1fV", volts);
     u8g2.drawStr(72 - u8g2.getStrWidth(buf), 39, buf);
   }
