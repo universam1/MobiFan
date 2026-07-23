@@ -22,7 +22,7 @@ Omitting `-e` builds `esp32c3-oled` (the NTC env), since it's
 ## Why two options
 
 The onboard NTC divider (see the main [../README.md](../README.md) and
-[buck-fb-control.md](buck-fb-control.md) for the rest of the hardware) is
+[boost-fb-control.md](boost-fb-control.md) for the rest of the hardware) is
 cheap and simple but its absolute accuracy is limited by resistor/NTC
 tolerance (typically ±1–2°C uncalibrated). A DS18B20 trades a bit of
 response speed for a factory-trimmed ±0.5°C digital reading, at the cost of

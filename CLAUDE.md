@@ -3,10 +3,10 @@
 PlatformIO (Arduino framework) firmware for an ESP32-C3 0.42" OLED board that
 controls 1–2 Thermaltake Pure 20 DC fans based on an NTC 100k/3950 temperature
 sensor, operated with a single button. Fan speed is set by varying the fan's
-supply voltage: a D-SUN MP1584EN buck module (onboard trim pot kept, 8.2 kΩ
-onboard pull-down) whose output the ESP32 steers by PWM current injection
-into its FB pin through an external 30 kΩ + 1k/1µF RC filter — see
-[docs/buck-fb-control.md](docs/buck-fb-control.md).
+supply voltage: an XL6009E1 boost module (onboard 10 kΩ trim pot kept, 330 Ω
+onboard pull-down), powered from 5 V USB, whose output the ESP32 steers by
+PWM current injection into its FB pin through an external 390 Ω + 330Ω/4.7µF
+RC filter — see [docs/boost-fb-control.md](docs/boost-fb-control.md).
 
 ## Build & flash
 
@@ -47,8 +47,9 @@ tasks, no heap use after setup.
 - **Manual mode**: levels 0–5 = fixed power 0/20/40/60/80/100%.
 - **Power → voltage**: everything outside `FanControl` deals in fan power %
   only. `FanControl` maps power >0 linearly onto `FAN_V_MIN`..`FAN_V_MAX`
-  (4.5–14 V) and power 0 to `BUCK_VOUT_MIN` (3.2 V, fan stops — there is no
-  true off).
+  (5.5–14 V) and power 0 to `BOOST_VOUT_MIN` (5.5 V, same as `FAN_V_MIN` —
+  a boost can't output less than its own ~5 V input, so the fan never fully
+  stops; there is no true off).
 - The main screen's bottom-right field shows the fan's **DC output voltage**
   (e.g. `9.5V`), not power %.
 - **Button**: short press cycles the level (manual 0→5→0, auto 1→5→1);
@@ -62,19 +63,23 @@ tasks, no heap use after setup.
 
 ## Hardware constraints
 
-- The buck PWM (GPIO10) drives an RC filter into the MP1584EN FB node and is
-  **inverted and bidirectional around the anchor**: ~24% duty (zero
-  injection) = 12 V anchor; lower duty sinks FB current (up to 14 V at ~8%);
-  higher duty sources (down to ~2.4 V at 100%). It must be **push-pull**
-  (never open-drain — the pin has to source and sink), and the frequency
-  must stay within 20–50 kHz so the 1k/1µF filter output is smooth.
-- **Pot calibration coupling**: the module's onboard pot is calibrated so
-  Vout = `BUCK_VOUT_CAL` (12.0 V, the fan's rated voltage) at zero injection;
-  the firmware derives the effective R_top from that constant. If the pot is
-  re-adjusted, `BUCK_VOUT_CAL` must be updated to match, or all commanded
-  voltages shift.
+- The boost PWM (GPIO10) drives an RC filter into the XL6009E1 FB node and is
+  **inverted and bidirectional around the anchor**: ~38% duty (zero
+  injection) = 12 V anchor; lower duty sinks FB current (up to 14 V at ~30%);
+  higher duty sources (down to ~5.5 V at ~65%, the commandable floor). It
+  must be **push-pull** (never open-drain — the pin has to source and
+  sink), and the frequency must stay within 20–50 kHz so the 330Ω/4.7µF
+  filter output is smooth. R_PWM (390 Ω) is now close in magnitude to
+  R_bottom (330 Ω), making the duty→Vout slope ~3x steeper than the old
+  buck design — bench-verify actual voltages against
+  [docs/boost-fb-control.md](docs/boost-fb-control.md)'s truth table.
+- **Pot calibration coupling**: the module's onboard 10 kΩ pot is calibrated
+  so Vout = `BOOST_VOUT_CAL` (12.0 V, the fan's rated voltage) at zero
+  injection; the firmware derives the effective R_top (~2.84 kΩ) from that
+  constant. If the pot is re-adjusted, `BOOST_VOUT_CAL` must be updated to
+  match, or all commanded voltages shift.
 - **Boot/fail-safe state**: with the GPIO high-Z (before `fan.begin()`, or
-  firmware dead), the buck sits at the pot anchor — 12 V, benign for the
+  firmware dead), the boost sits at the pot anchor — 12 V, benign for the
   fan by design. `fan.begin()` must remain the first call in `setup()`.
   Keep the anchor at the fan's rated voltage; the 14 V max is command-only.
 - All the inversion math is contained in `FanControl::applyVolts()` — never

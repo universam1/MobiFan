@@ -4,15 +4,15 @@ Controls one or more Thermaltake Pure 20 DC fans from an ESP32-C3 board with a
 0.42" OLED, using an NTC (or optional DS18B20) temperature sensor and a
 single button.
 
-Fan speed is controlled by varying the fan's **supply voltage**: a D-SUN
-MP1584EN buck module's output (~2.4–14 V from a 20 V input) is steered by the
+Fan speed is controlled by varying the fan's **supply voltage**: an XL6009E1
+boost module's output (~5.5–14 V from a 5 V USB input) is steered by the
 ESP32 via bidirectional PWM current injection into the converter's feedback
-pin. The module's onboard trim pot stays in place and is calibrated to 12.0 V
-— the *anchor* the fan sees at boot or if the firmware dies — while sinking
-FB current lets the firmware command up to 14 V. Only a 30 kΩ summing
-resistor and a 1k/1µF RC filter are added externally — concept, schematic,
+pin. The module's onboard 10 kΩ trim pot stays in place and is calibrated to
+12.0 V — the *anchor* the fan sees at boot or if the firmware dies — while
+sinking FB current lets the firmware command up to 14 V. Only a 390 Ω summing
+resistor and a 330Ω/4.7µF RC filter are added externally — concept, schematic,
 calibration, and transfer function in
-[docs/buck-fb-control.md](docs/buck-fb-control.md).
+[docs/boost-fb-control.md](docs/boost-fb-control.md).
 
 ## Behavior
 
@@ -32,8 +32,10 @@ calibration, and transfer function in
   | 5 | 20 °C |
 
   If the NTC reads open/short, auto mode fails safe to 100%.
-- Fan power maps to supply voltage: >0–100% → 4.5–14 V (`FAN_V_MIN`/`FAN_V_MAX`);
-  power 0 drops the buck to 3.2 V, which stops the fan (there is no true off).
+- Fan power maps to supply voltage: >0–100% → 5.5–14 V (`FAN_V_MIN`/`FAN_V_MAX`);
+  power 0 drops the boost to the same 5.5 V floor (`BOOST_VOUT_MIN`) — a
+  boost can't go lower than its own ~5 V input, so the fan never fully stops
+  (there is no true off).
 - **Display**: temperature, mode+level (`A3`/`M2`), live power bar, RPM, and
   the fan's DC output voltage.
   Any level or mode change shows a full-screen popup for 1.5 s.
@@ -45,7 +47,7 @@ calibration, and transfer function in
 |---|---|---|
 | OLED SDA / SCL | 5 / 6 | onboard 72×40 SSD1306 |
 | Button | 9 | onboard BOOT button, active low |
-| Buck FB PWM | 10 | push-pull → 1 kΩ + 1 µF filter → 30 kΩ into MP1584EN FB |
+| Boost FB PWM | 10 | push-pull → 330 Ω + 4.7 µF filter → 390 Ω into XL6009E1 FB |
 | Fan tach | 7 | from one fan's sense wire; internal pull-up |
 | NTC | 3 | divider: 3.3 V → **NTC 100k/3950** → GPIO3 → 100 kΩ → GND |
 | DS18B20 (optional) | 4 | 1-Wire, normally powered, no external pull-up (uses the C3's internal weak pull-up) |
@@ -63,16 +65,16 @@ external pull-up resistor is needed (the firmware enables the C3's internal
 weak pull-up instead). Wiring, rationale, and the non-blocking conversion
 polling are covered in [docs/temp-sensor.md](docs/temp-sensor.md).
 
-Power: 20 V DC feeds the MP1584EN, whose ~2.4–14 V output supplies the fans
+Power: 5 V USB feeds the XL6009E1, whose ~5.5–14 V output supplies the fans
 (wired in parallel, tach from only one fan). The ESP32 board needs its own
 fixed 5 V supply — the fan rail varies and cannot power it.
 
 **Calibration**: with the GPIO floating (R_PWM injecting nothing), set the
-module's onboard pot to **12.0 V**. That pot setting is the anchor: what the
-fans see at boot (and in any firmware-dead state) — deliberately the fan's
-rated voltage. The 14 V maximum is reached by the firmware sinking FB
-current (~8% duty). If your measured anchor differs, adjust `BUCK_VOUT_CAL`
-in [src/config.h](src/config.h).
+module's onboard 10 kΩ pot to **12.0 V**. That pot setting is the anchor:
+what the fans see at boot (and in any firmware-dead state) — deliberately
+the fan's rated voltage. The 14 V maximum is reached by the firmware sinking
+FB current (~30% duty). If your measured anchor differs, adjust
+`BOOST_VOUT_CAL` in [src/config.h](src/config.h).
 
 All pins and tunables live in [src/config.h](src/config.h).
 

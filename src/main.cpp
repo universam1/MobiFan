@@ -27,7 +27,7 @@ static bool stalled = false;
 static uint32_t lastLog = 0;
 
 void setup() {
-  // Fan first: until the FB-injection PWM runs, the buck free-runs at ~14 V.
+  // Fan first: until the FB-injection PWM runs, the boost sits at the 12 V anchor.
   fan.begin();
   Serial.begin(115200);
   tempSensor.begin();
