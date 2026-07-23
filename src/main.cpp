@@ -1,4 +1,6 @@
 #include <Arduino.h>
+#include <WiFi.h>
+#include <esp32-hal-bt.h>
 #include "config.h"
 #if defined(TEMP_SENSOR_DS18B20)
 #include "TempSensorDS18B20.h"
@@ -27,6 +29,13 @@ static bool stalled = false;
 static uint32_t lastLog = 0;
 
 void setup() {
+  // This firmware never uses WiFi/BLE; explicitly power the radios off
+  // (belt-and-suspenders - they're never started either way, but this
+  // guarantees the RF/PHY power domains are gated for a headless,
+  // battery-powered van install).
+  WiFi.mode(WIFI_OFF);
+  btStop();
+
   // Fan first: until the FB-injection PWM runs, the boost sits at the 12 V anchor.
   fan.begin();
   Serial.begin(115200);

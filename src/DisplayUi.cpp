@@ -12,6 +12,15 @@ void DisplayUi::begin() {
   // comment on OLED_X_OFFSET/OLED_Y_OFFSET in config.h.
   u8g2.getU8x8()->x_offset = OLED_X_OFFSET;
   u8g2.sendF("ca", 0x0d3, OLED_Y_OFFSET); // SSD1306 "Set Display Offset"
+  // Note on brightness: this panel is dim at any setting, but that is a
+  // PHYSICAL property of the glass, not a fixable driver/register issue.
+  // u8g2's stock init already sends the SSD1306B Iref command (0xAD/0x30)
+  // and maxes every relevant register; the SH1106 driver path likewise
+  // already maxes DC-DC pump voltage (0x33) and contrast. Bench-tested all
+  // three drivers (this SSD1306, SH1106, Adafruit) plus every register
+  // permutation on real hardware - all equally dim; touching 0xAD only
+  // ever no-ops or blacks the panel. Do not re-attempt brightness tuning
+  // here. See /memories/repo/mobifan-hw-debug.md for the full findings.
   u8g2.setContrast(255);     // set contrast to maximum
 }
 
@@ -57,7 +66,7 @@ void DisplayUi::drawPopup() {
 // +--------------------------+
 // |  24.3°              A3   |  y=16: temp logisoso16 left, mode+level right
 // |  [#########_______]      |  y=21..29: power bar = live fan power
-// |  1450rpm           9.5V  |  y=39: rpm left, fan DC volts right (6x10);
+// |  1450RPM           9.5V  |  y=39: rpm left, fan DC volts right (6x13);
 // +--------------------------+        replaced by "FAN STALL!" on stall
 void DisplayUi::drawMain(float tempC, bool tempValid, Mode mode, uint8_t level,
                          float powerPct, float volts, uint32_t rpm,
@@ -80,13 +89,15 @@ void DisplayUi::drawMain(float tempC, bool tempValid, Mode mode, uint8_t level,
   u8g2.drawFrame(0, 21, 72, 8);
   u8g2.drawBox(1, 22, (uint8_t)(70.0f * powerPct / 100.0f), 6);
 
-  // Bottom line: stall warning or RPM + fan supply voltage
-  u8g2.setFont(u8g2_font_6x10_tr);
+  // Bottom line: stall warning or RPM + fan supply voltage. 6x13 (not 10)
+  // for readability on this tiny panel; RPM is spelled uppercase (not
+  // "rpm") so no glyph has a descender to clip against the power bar above.
+  u8g2.setFont(u8g2_font_6x13_tr);
   if (stalled) {
     const char* warn = "FAN STALL!";
     u8g2.drawStr((72 - u8g2.getStrWidth(warn)) / 2, 39, warn);
   } else {
-    snprintf(buf, sizeof(buf), "%urpm", (unsigned)rpm);
+    snprintf(buf, sizeof(buf), "%uRPM", (unsigned)rpm);
     u8g2.drawStr(0, 39, buf);
     snprintf(buf, sizeof(buf), "%.1fV", volts);
     u8g2.drawStr(72 - u8g2.getStrWidth(buf), 39, buf);

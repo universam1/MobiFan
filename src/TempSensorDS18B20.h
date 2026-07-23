@@ -11,9 +11,10 @@
 // and every other module stay unaware of which sensor is active.
 //
 // Conversions are polled, never blocked on: begin() does one blocking read
-// so a valid temperature exists at boot, then tick() issues a request and
-// polls for completion after DS18B20_CONVERSION_MS, same as TempSensor's
-// 1 Hz cadence.
+// so a valid temperature exists at boot, then tick() re-triggers a new
+// conversion back-to-back as soon as the previous one completes, paced
+// only by the sensor's own DS18B20_CONVERSION_MS (~375ms at 11-bit) - not
+// an artificial fixed interval.
 //
 // Talks to the sensor with raw OneWire commands using Skip ROM (0xCC)
 // instead of DallasTemperature's address-based API - this specific sensor
@@ -45,7 +46,6 @@ private:
   State _state = State::Idle;
   float _temp = 0;
   bool _valid = false;
-  uint32_t _lastRequest = 0;
   uint32_t _convertStart = 0;
 };
 #endif // TEMP_SENSOR_DS18B20
