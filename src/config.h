@@ -36,7 +36,7 @@ constexpr int PIN_OLED_SCL = 6;
 constexpr uint8_t OLED_X_OFFSET = 30; // default_x_offset (28) + small nudge
 constexpr uint8_t OLED_Y_OFFSET = 12; // settled value — see note above
 constexpr int PIN_BUTTON   = 9;   // onboard BOOT button, active low
-constexpr int PIN_BOOST_PWM = 10; // push-pull PWM into the XL6009E1 FB filter
+constexpr int PIN_BOOST_PWM = 10; // push-pull PWM into the MT3608 FB filter
                                   // (see docs/boost-fb-control.md)
 constexpr int PIN_FAN_TACH = 7;   // open-collector, internal pull-up
 constexpr int PIN_NTC_ADC  = 3;   // ADC1_CH3 (C3: ADC1 = GPIO0-4 only, ADC2 unusable)
@@ -62,33 +62,36 @@ constexpr uint8_t  DS18B20_RESOLUTION_BITS = 11; // 0.125C steps, ~375ms convers
 constexpr uint32_t DS18B20_CONVERSION_MS = 375;  // 11-bit resolution conversion time
 #endif
 
-// ---------- Boost converter (XL6009E1, FB current injection) ----------
+// ---------- Boost converter (MT3608, FB current injection) ----------
 // The fan (Thermaltake Pure 20, 3-pin DC) is speed-controlled by varying its
 // supply voltage. The ESP32 PWMs into the boost's FB node through an RC
-// filter + summing resistor; the mapping is INVERTED (high duty -> low
-// Vout) — the same FB-injection trick as a buck, topology-agnostic KCL.
-// Powered from 5V USB, boosted to 5.5-14V. The module's ONBOARD 10k trim
-// pot (Vout->FB) and onboard 330R pull-down are kept; only R_PWM + the RC
+// filter + summing resistor; the mapping is INVERTED (high duty -> low Vout).
+// Powered from 5V USB, boosted to 5.5-14V. The module's ONBOARD 100k trim
+// pot (Vout->FB) and onboard 2.2k pull-down are kept; only R_PWM + the RC
 // filter are external. The pot is calibrated so Vout = BOOST_VOUT_CAL with
 // the PWM idle/high-Z (zero injection). Injection is BIDIRECTIONAL around
-// that anchor: duty above ~38% sources current into FB (Vout drops below
-// the anchor), duty below ~38% sinks current (Vout rises above it). The
+// that anchor: duty above ~18.2% sources current into FB (Vout drops below
+// the anchor), duty below ~18.2% sinks current (Vout rises above it). The
 // anchor is deliberately the fan's rated 12 V — it is what the fan sees at
 // boot and if the firmware ever dies — while the 14 V maximum is only
-// reached on command (~30% duty).
+// reached on command (~4.8% duty; the 5.5 V floor is ~61.5%).
 constexpr uint32_t BOOST_PWM_FREQ_HZ = 25000; // keep 20-50 kHz for low ripple after RC
 constexpr uint8_t  BOOST_PWM_RES_BITS = 10;
-constexpr float BOOST_VREF     = 1.25f;     // XL6009E1 internal FB reference
+constexpr float BOOST_VREF     = 0.6f;      // MT3608 internal FB reference
 constexpr float BOOST_VOUT_CAL = 12.0f;     // pot-set Vout at zero injection (measure!)
-constexpr float BOOST_R_BOTTOM = 330.0f;    // FB -> GND (onboard on the XL6009 module)
-constexpr float BOOST_R_TOP    =            // effective pot position, derived (~2.84k of
-    // the pot's 10k range)
+constexpr float BOOST_R_BOTTOM = 2200.0f;   // FB -> GND (onboard on the MT3608 module)
+constexpr float BOOST_R_TOP    =            // effective pot position, derived (~41.8k of
+    // the pot's 100k range)
     (BOOST_VOUT_CAL - BOOST_VREF) * BOOST_R_BOTTOM / BOOST_VREF;
-constexpr float BOOST_R_PWM    = 390.0f;    // filter output -> FB (summing, 1%)
+constexpr float BOOST_R_PWM    = 8200.0f;   // filter output -> FB (summing, 1%)
+constexpr float BOOST_R_FILT   = 1000.0f;   // GPIO -> filter node (RC series R, with
+                                            // 2.2uF to GND: fc ~72 Hz). Forms a divider
+                                            // with R_PWM against FB, so FanControl must
+                                            // compensate — see applyVolts().
 constexpr float BOOST_LOGIC_V  = 3.3f;      // PWM high level after RC filter
 constexpr float BOOST_VOUT_MIN = 5.5f;      // lowest commandable Vout (boost floor is
                                            // ~Vin=5V; there is no true off, see FAN_V_MIN)
-constexpr float BOOST_VOUT_MAX = 14.0f;     // reached by sinking FB current (~30% duty)
+constexpr float BOOST_VOUT_MAX = 14.0f;     // reached by sinking FB current (~4.8% duty)
 
 // ---------- Fan (voltage-controlled DC) ----------
 constexpr float FAN_V_MIN = 5.5f;  // volts at power >0..low end; equals BOOST_VOUT_MIN

@@ -3,9 +3,9 @@
 PlatformIO (Arduino framework) firmware for an ESP32-C3 0.42" OLED board that
 controls 1–2 Thermaltake Pure 20 DC fans based on an NTC 100k/3950 temperature
 sensor, operated with a single button. Fan speed is set by varying the fan's
-supply voltage: an XL6009E1 boost module (onboard 10 kΩ trim pot kept, 330 Ω
+supply voltage: an MT3608 boost module (onboard 100 kΩ trim pot kept, 2.2 kΩ
 onboard pull-down), powered from 5 V USB, whose output the ESP32 steers by
-PWM current injection into its FB pin through an external 390 Ω + 330Ω/4.7µF
+PWM current injection into its FB pin through an external 8.2 kΩ + 1kΩ/2.2µF
 RC filter — see [docs/boost-fb-control.md](docs/boost-fb-control.md).
 
 ## Build & flash
@@ -63,19 +63,26 @@ tasks, no heap use after setup.
 
 ## Hardware constraints
 
-- The boost PWM (GPIO10) drives an RC filter into the XL6009E1 FB node and is
-  **inverted and bidirectional around the anchor**: ~38% duty (zero
-  injection) = 12 V anchor; lower duty sinks FB current (up to 14 V at ~30%);
-  higher duty sources (down to ~5.5 V at ~65%, the commandable floor). It
+- The boost PWM (GPIO10) drives an RC filter into the MT3608 FB node and is
+  **inverted and bidirectional around the anchor**: ~18.2% duty (zero
+  injection) = 12 V anchor; lower duty sinks FB current (up to 14 V at ~4.8%);
+  higher duty sources (down to ~5.5 V at ~61.5%, the commandable floor). It
   must be **push-pull** (never open-drain — the pin has to source and
-  sink), and the frequency must stay within 20–50 kHz so the 330Ω/4.7µF
-  filter output is smooth. R_PWM (390 Ω) is now close in magnitude to
-  R_bottom (330 Ω), making the duty→Vout slope ~3x steeper than the old
-  buck design — bench-verify actual voltages against
+  sink), and the frequency must stay within 20–50 kHz so the 1kΩ/2.2µF
+  filter output is smooth. Bench-verify actual voltages against
   [docs/boost-fb-control.md](docs/boost-fb-control.md)'s truth table.
-- **Pot calibration coupling**: the module's onboard 10 kΩ pot is calibrated
+- **R_FILT is part of the DC transfer function, not just the filter.** R_FILT
+  (1 kΩ) and R_PWM (8.2 kΩ) form a divider between the GPIO and the FB node
+  (which the regulator holds at 0.6 V), so `applyVolts()` must convert its
+  computed FB-node voltage into a *pin* voltage via
+  `V_gpio = V_node + R_FILT*(V_node - Vref)/R_PWM` before dividing by 3.3 —
+  dropping that term offsets every commanded voltage by ~11%. The filter's
+  `R_FILT·C` product is set by the Vout ripple budget (ripple scales with
+  `R_top·i_FB`, so it does not simply track R_PWM); R_FILT alone does not set
+  ripple, only the RC product does.
+- **Pot calibration coupling**: the module's onboard 100 kΩ pot is calibrated
   so Vout = `BOOST_VOUT_CAL` (12.0 V, the fan's rated voltage) at zero
-  injection; the firmware derives the effective R_top (~2.84 kΩ) from that
+  injection; the firmware derives the effective R_top (~41.8 kΩ) from that
   constant. If the pot is re-adjusted, `BOOST_VOUT_CAL` must be updated to
   match, or all commanded voltages shift.
 - **Boot/fail-safe state**: with the GPIO high-Z (before `fan.begin()`, or

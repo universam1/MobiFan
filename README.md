@@ -4,13 +4,13 @@ Controls one or more Thermaltake Pure 20 DC fans from an ESP32-C3 board with a
 0.42" OLED, using a DS18B20 (or optional NTC) temperature sensor and a
 single button.
 
-Fan speed is controlled by varying the fan's **supply voltage**: an XL6009E1
+Fan speed is controlled by varying the fan's **supply voltage**: an MT3608
 boost module's output (~5.5–14 V from a 5 V USB input) is steered by the
 ESP32 via bidirectional PWM current injection into the converter's feedback
-pin. The module's onboard 10 kΩ trim pot stays in place and is calibrated to
+pin. The module's onboard 100 kΩ trim pot stays in place and is calibrated to
 12.0 V — the *anchor* the fan sees at boot or if the firmware dies — while
-sinking FB current lets the firmware command up to 14 V. Only a 390 Ω summing
-resistor and a 330Ω/4.7µF RC filter are added externally — concept, schematic,
+sinking FB current lets the firmware command up to 14 V. Only an 8.2 kΩ summing
+resistor and a 1kΩ/2.2µF RC filter are added externally — concept, schematic,
 calibration, and transfer function in
 [docs/boost-fb-control.md](docs/boost-fb-control.md).
 
@@ -47,7 +47,7 @@ calibration, and transfer function in
 |---|---|---|
 | OLED SDA / SCL | 5 / 6 | onboard 72×40 SSD1306 |
 | Button | 9 | onboard BOOT button, active low |
-| Boost FB PWM | 10 | push-pull → 330 Ω + 4.7 µF filter → 390 Ω into XL6009E1 FB |
+| Boost FB PWM | 10 | push-pull → 1 kΩ + 2.2 µF filter → 8.2 kΩ into MT3608 FB |
 | Fan tach | 7 | from one fan's sense wire; internal pull-up |
 | DS18B20 | 4 | 1-Wire, normally powered, external 4.7 kΩ pull-up to 3.3 V |
 | NTC (optional alt.) | 3 | divider: 3.3 V → **NTC 100k/3950** → GPIO3 → 100 kΩ → GND |
@@ -65,15 +65,15 @@ alternative — both sensors share the same interface so the rest of the
 firmware is unchanged either way. Wiring, rationale, and the non-blocking
 conversion polling are covered in [docs/temp-sensor.md](docs/temp-sensor.md).
 
-Power: 5 V USB feeds the XL6009E1, whose ~5.5–14 V output supplies the fans
+Power: 5 V USB feeds the MT3608, whose ~5.5–14 V output supplies the fans
 (wired in parallel, tach from only one fan). The ESP32 board needs its own
 fixed 5 V supply — the fan rail varies and cannot power it.
 
 **Calibration**: with the GPIO floating (R_PWM injecting nothing), set the
-module's onboard 10 kΩ pot to **12.0 V**. That pot setting is the anchor:
+module's onboard 100 kΩ pot to **12.0 V**. That pot setting is the anchor:
 what the fans see at boot (and in any firmware-dead state) — deliberately
 the fan's rated voltage. The 14 V maximum is reached by the firmware sinking
-FB current (~30% duty). If your measured anchor differs, adjust
+FB current (~4.8% duty). If your measured anchor differs, adjust
 `BOOST_VOUT_CAL` in [src/config.h](src/config.h).
 
 All pins and tunables live in [src/config.h](src/config.h).
