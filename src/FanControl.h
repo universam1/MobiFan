@@ -1,6 +1,8 @@
 #pragma once
 #include <Arduino.h>
 
+#if !defined(FAN_CONTROL_PD)
+
 // Fan speed via supply voltage: bidirectional PWM current injection into the
 // MT3608 boost's FB node (see docs/boost-fb-control.md). The PWM->Vout
 // mapping is inverted around the pot-calibrated anchor BOOST_VOUT_CAL (12 V =
@@ -22,3 +24,5 @@ private:
   float _power = 0;
   float _volts = 0;
 };
+
+#endif // !FAN_CONTROL_PD

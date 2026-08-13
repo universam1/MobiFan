@@ -36,8 +36,6 @@ constexpr int PIN_OLED_SCL = 6;
 constexpr uint8_t OLED_X_OFFSET = 30; // default_x_offset (28) + small nudge
 constexpr uint8_t OLED_Y_OFFSET = 12; // settled value — see note above
 constexpr int PIN_BUTTON   = 9;   // onboard BOOT button, active low
-constexpr int PIN_BOOST_PWM = 10; // push-pull PWM into the MT3608 FB filter
-                                  // (see docs/boost-fb-control.md)
 constexpr int PIN_FAN_TACH = 7;   // open-collector, internal pull-up
 constexpr int PIN_NTC_ADC  = 3;   // ADC1_CH3 (C3: ADC1 = GPIO0-4 only, ADC2 unusable)
                                   // divider: 3.3V - NTC - node - 100k - GND
@@ -62,6 +60,42 @@ constexpr uint8_t  DS18B20_RESOLUTION_BITS = 11; // 0.125C steps, ~375ms convers
 constexpr uint32_t DS18B20_CONVERSION_MS = 375;  // 11-bit resolution conversion time
 #endif
 
+// ============================================================================
+// Fan voltage control — build-time selection between:
+//   - MT3608 boost converter with FB-injection PWM (default, env *-ds18b20)
+//   - CH224K USB-C PD sink with CFG-pin voltage selection (env *-pd)
+// ============================================================================
+
+#if defined(FAN_CONTROL_PD)
+// ---------- CH224K USB-C PD Sink (3C3PDSink01 / HW-443) ----------
+// The fan supply voltage comes directly from the USB-C PSU, negotiated by the
+// CH224K via USB PD. The ESP32 selects among 4 fixed PDOs (5/9/12/15V) by
+// driving the chip's CFG1-3 pins (internal pull-ups on chip; direct push-pull
+// GPIO drive, no external resistors). See docs/pd-sink-control.md.
+constexpr int PIN_PD_CFG1 = 0;   // HIGH = 5V; LOW = look at CFG2/3
+constexpr int PIN_PD_CFG2 = 1;   // see truth table
+constexpr int PIN_PD_CFG3 = 2;   // see truth table
+
+// Available PD voltages (20V excluded — fan rated 12V, 15V is the overvoltage max)
+constexpr float PD_VOLTS[] = {5.0f, 9.0f, 12.0f, 15.0f};
+constexpr uint8_t PD_STEPS = 4;
+
+constexpr float FAN_V_MIN = 5.0f;
+constexpr float FAN_V_MAX = 15.0f;
+
+// ---------- Controller (PD: 4 levels matching 4 voltage steps) ----------
+constexpr uint8_t  MANUAL_LEVEL_COUNT = 4;  // levels 0..3
+constexpr uint8_t  AUTO_LEVEL_COUNT   = 4;  // levels 1..4
+// Manual levels: 0=5V, 1=9V, 2=12V, 3=15V — each step changes the output.
+constexpr float MANUAL_POWER_PCT[4] = {0, 33, 66, 100};
+constexpr float FAN_MIN_POWER_PCT = 33.0f;  // auto floor → 9V step
+constexpr uint8_t BOOT_MANUAL_LEVEL = 2;    // boots at 12V (fan's rated voltage)
+constexpr uint8_t BOOT_AUTO_LEVEL   = 2;
+// Auto ramp endpoints: level 1→40C, 2→33C, 3→26C, 4→19C
+constexpr float AUTO_BASE_TEMP_C = 15.0f;
+constexpr float autoRampMaxTempC(uint8_t level) { return 47.0f - 7.0f * level; }
+
+#else
 // ---------- Boost converter (MT3608, FB current injection) ----------
 // The fan (Thermaltake Pure 20, 3-pin DC) is speed-controlled by varying its
 // supply voltage. The ESP32 PWMs into the boost's FB node through an RC
@@ -75,6 +109,8 @@ constexpr uint32_t DS18B20_CONVERSION_MS = 375;  // 11-bit resolution conversion
 // anchor is deliberately the fan's rated 12 V — it is what the fan sees at
 // boot and if the firmware ever dies — while the 14 V maximum is only
 // reached on command (~4.8% duty; the 5.5 V floor is ~61.5%).
+constexpr int PIN_BOOST_PWM = 10; // push-pull PWM into the MT3608 FB filter
+                                  // (see docs/boost-fb-control.md)
 constexpr uint32_t BOOST_PWM_FREQ_HZ = 25000; // keep 20-50 kHz for low ripple after RC
 constexpr uint8_t  BOOST_PWM_RES_BITS = 10;
 constexpr float BOOST_VREF     = 0.6f;      // MT3608 internal FB reference
@@ -98,20 +134,22 @@ constexpr float FAN_V_MIN = 5.5f;  // volts at power >0..low end; equals BOOST_V
                                     // since a boost can't go lower than ~Vin -- the fan
                                     // never fully stops (no true off, by design)
 constexpr float FAN_V_MAX = 14.0f; // volts at 100% power
+
+// ---------- Controller (boost: 6 manual levels, 5 auto levels) ----------
+constexpr uint8_t  MANUAL_LEVEL_COUNT = 6;  // levels 0..5
+constexpr uint8_t  AUTO_LEVEL_COUNT   = 5;  // levels 1..5
 constexpr float FAN_MIN_POWER_PCT = 20.0f; // auto-mode floor (never off)
 // Manual levels 0..5 -> power %  (0 = boost at BOOST_VOUT_MIN; fan keeps
 // spinning at its lowest voltage, there is no true off)
 constexpr float MANUAL_POWER_PCT[6] = {0, 20, 40, 60, 80, 100};
-
-// ---------- Auto mode ramps ----------
-// All ramps: FAN_MIN_POWER_PCT at <= AUTO_BASE_TEMP_C, 100% at >= rampMaxTemp(level).
-// Level 1 -> 100% at 40C ... level 5 -> 100% at 20C.
+constexpr uint8_t BOOT_MANUAL_LEVEL = 3;    // boots into manual mode at this power step
+constexpr uint8_t BOOT_AUTO_LEVEL   = 3;    // level auto mode starts at if switched into
+// Auto ramp endpoints: level 1->40C ... level 5->20C
 constexpr float AUTO_BASE_TEMP_C = 15.0f;
 constexpr float autoRampMaxTempC(uint8_t level) { return 45.0f - 5.0f * level; }
+#endif
 
 // ---------- Behavior ----------
-constexpr uint8_t  BOOT_MANUAL_LEVEL = 3;    // boots into manual mode at this power step
-constexpr uint8_t  BOOT_AUTO_LEVEL   = 3;    // level auto mode starts at if switched into
 constexpr uint32_t LONG_PRESS_MS     = 800;
 constexpr uint32_t DEBOUNCE_MS       = 30;
 constexpr uint32_t POPUP_DURATION_MS = 1500;

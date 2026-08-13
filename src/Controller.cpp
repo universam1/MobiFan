@@ -8,9 +8,9 @@ bool Controller::handleButton(ButtonEvent ev) {
   }
   if (ev == ButtonEvent::Short) {
     if (_mode == Mode::Manual)
-      _manualLevel = (_manualLevel + 1) % 6;        // 0..5, wraps to off
+      _manualLevel = (_manualLevel + 1) % MANUAL_LEVEL_COUNT;  // wraps to off
     else
-      _autoLevel = _autoLevel % 5 + 1;              // 1..5, never off
+      _autoLevel = _autoLevel % AUTO_LEVEL_COUNT + 1;          // 1..N, never off
     return true;
   }
   return false;

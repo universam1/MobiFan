@@ -1,3 +1,5 @@
+#if !defined(FAN_CONTROL_PD)
+
 #include "FanControl.h"
 #include "config.h"
 
@@ -38,3 +40,5 @@ void FanControl::applyVolts(float v) {
   float duty = constrain(vGpio / BOOST_LOGIC_V, 0.0f, 1.0f);
   ledcWrite(LEDC_CHANNEL, (uint32_t)(duty * DUTY_MAX + 0.5f));
 }
+
+#endif // !FAN_CONTROL_PD
