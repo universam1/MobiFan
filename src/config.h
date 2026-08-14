@@ -55,7 +55,7 @@ constexpr float TEMP_EMA_ALPHA = 0.2f;     // smoothing, both temp sensors
 // Swaps in for the NTC divider (env esp32c3-oled, kept as an alternate);
 // Controller/DisplayUi are unaware which sensor is active.
 #if defined(TEMP_SENSOR_DS18B20)
-constexpr int PIN_ONEWIRE = 4;   // ADC1-capable pin not otherwise used
+constexpr int PIN_ONEWIRE = 10;  // GPIO10 (free in PD variant, no boost PWM)
 constexpr uint8_t  DS18B20_RESOLUTION_BITS = 11; // 0.125C steps, ~375ms conversion
 constexpr uint32_t DS18B20_CONVERSION_MS = 375;  // 11-bit resolution conversion time
 #endif
@@ -72,9 +72,9 @@ constexpr uint32_t DS18B20_CONVERSION_MS = 375;  // 11-bit resolution conversion
 // CH224K via USB PD. The ESP32 selects among 4 fixed PDOs (5/9/12/15V) by
 // driving the chip's CFG1-3 pins (internal pull-ups on chip; direct push-pull
 // GPIO drive, no external resistors). See docs/pd-sink-control.md.
-constexpr int PIN_PD_CFG1 = 0;   // HIGH = 5V; LOW = look at CFG2/3
+constexpr int PIN_PD_CFG1 = 2;   // HIGH = 5V; LOW = look at CFG2/3
 constexpr int PIN_PD_CFG2 = 1;   // see truth table
-constexpr int PIN_PD_CFG3 = 2;   // see truth table
+constexpr int PIN_PD_CFG3 = 0;   // see truth table
 
 // Available PD voltages (20V excluded — fan rated 12V, 15V is the overvoltage max)
 constexpr float PD_VOLTS[] = {5.0f, 9.0f, 12.0f, 15.0f};
