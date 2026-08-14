@@ -88,11 +88,11 @@ constexpr uint8_t  MANUAL_LEVEL_COUNT = 4;  // levels 0..3
 constexpr uint8_t  AUTO_LEVEL_COUNT   = 4;  // levels 1..4
 // Manual levels: 0=5V, 1=9V, 2=12V, 3=15V — each step changes the output.
 constexpr float MANUAL_POWER_PCT[4] = {0, 33, 66, 100};
-constexpr float FAN_MIN_POWER_PCT = 33.0f;  // auto floor → 9V step
+constexpr float FAN_MIN_POWER_PCT = 0.0f;  // auto floor → 9V step
 constexpr uint8_t BOOT_MANUAL_LEVEL = 2;    // boots at 12V (fan's rated voltage)
 constexpr uint8_t BOOT_AUTO_LEVEL   = 2;
 // Auto ramp endpoints: level 1→40C, 2→33C, 3→26C, 4→19C
-constexpr float AUTO_BASE_TEMP_C = 15.0f;
+constexpr float AUTO_BASE_TEMP_C = 20.0f;
 constexpr float autoRampMaxTempC(uint8_t level) { return 47.0f - 7.0f * level; }
 
 #else
