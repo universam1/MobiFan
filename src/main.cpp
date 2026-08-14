@@ -7,11 +7,7 @@
 #else
 #include "TempSensor.h"
 #endif
-#if defined(FAN_CONTROL_PD)
-#include "FanControlPD.h"
-#else
 #include "FanControl.h"
-#endif
 #include "Tach.h"
 #include "ButtonInput.h"
 #include "Controller.h"
@@ -22,11 +18,7 @@ static TempSensorDS18B20 tempSensor;
 #else
 static TempSensor tempSensor;
 #endif
-#if defined(FAN_CONTROL_PD)
-static FanControlPD fan;
-#else
 static FanControl fan;
-#endif
 static Tach tach;
 static ButtonInput button;
 static Controller controller;

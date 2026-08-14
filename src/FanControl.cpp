@@ -1,44 +1,61 @@
-#if !defined(FAN_CONTROL_PD)
-
 #include "FanControl.h"
 #include "config.h"
 
-static constexpr uint8_t LEDC_CHANNEL = 0;
-static constexpr uint32_t DUTY_MAX = (1u << BOOST_PWM_RES_BITS) - 1;
-
 void FanControl::begin() {
-  ledcSetup(LEDC_CHANNEL, BOOST_PWM_FREQ_HZ, BOOST_PWM_RES_BITS);
-  ledcAttachPin(PIN_BOOST_PWM, LEDC_CHANNEL);
-  // Push-pull (default) on purpose: the pin drives the 1k/2.2uF RC filter
-  // and must both source and sink current into the FB summing resistor.
+  pinMode(PIN_PD_CFG1, OUTPUT);
+  pinMode(PIN_PD_CFG2, OUTPUT);
+  pinMode(PIN_PD_CFG3, OUTPUT);
+  // Start at 5V (safe default, matches CH224K's own power-on state when
+  // CFG1 is floating/HIGH).
+  digitalWrite(PIN_PD_CFG1, HIGH);
+  digitalWrite(PIN_PD_CFG2, HIGH);
+  digitalWrite(PIN_PD_CFG3, HIGH);
   setPowerPercent(0);
 }
 
 void FanControl::setPowerPercent(float pct) {
   _power = constrain(pct, 0.0f, 100.0f);
-  if (_power <= 0.0f) {
-    applyVolts(BOOST_VOUT_MIN); // no true off — lowest voltage the fan sees
-    return;
+
+  // Quantize continuous power% to the 4 discrete PD voltage steps.
+  // Equal-width 25% bands so all 4 steps (including 5V) are reachable:
+  //   0..24%   -> 5V
+  //   25..49%  -> 9V
+  //   50..74%  -> 12V  (fan's rated voltage)
+  //   75..100% -> 15V
+  float volts;
+  if (_power < 25.0f)      volts = PD_VOLTS[0];  // 5V
+  else if (_power < 50.0f) volts = PD_VOLTS[1];  // 9V
+  else if (_power < 75.0f) volts = PD_VOLTS[2];  // 12V
+  else                     volts = PD_VOLTS[3];  // 15V
+
+  if (volts != _volts) {
+    _volts = volts;
+    applyCfg(_volts);
   }
-  applyVolts(FAN_V_MIN + _power / 100.0f * (FAN_V_MAX - FAN_V_MIN));
 }
 
-// KCL at the FB node (held at BOOST_VREF by the regulator):
-//   Vout = Vref + Rtop * (Vref/Rbottom - (Vnode - Vref)/Rpwm)
-// solved for the filter-output voltage needed for a target Vout:
-//   Vnode = Vref + Rpwm * (Vref/Rbottom - (Vout - Vref)/Rtop)
-// Vnode is not the GPIO's average voltage: R_FILT and R_PWM form a divider
-// between the pin and the FB node, so the pin must overdrive by the drop
-// across R_FILT. From (Vgpio - Vnode)/R_FILT = (Vnode - Vref)/R_PWM:
-//   Vgpio = Vnode + R_FILT * (Vnode - Vref) / R_PWM
-// Note the inversion: higher duty -> higher Vnode -> LOWER Vout.
-void FanControl::applyVolts(float v) {
-  _volts = constrain(v, BOOST_VOUT_MIN, BOOST_VOUT_MAX);
-  float vNode = BOOST_VREF + BOOST_R_PWM * (BOOST_VREF / BOOST_R_BOTTOM -
-                                            (_volts - BOOST_VREF) / BOOST_R_TOP);
-  float vGpio = vNode + BOOST_R_FILT * (vNode - BOOST_VREF) / BOOST_R_PWM;
-  float duty = constrain(vGpio / BOOST_LOGIC_V, 0.0f, 1.0f);
-  ledcWrite(LEDC_CHANNEL, (uint32_t)(duty * DUTY_MAX + 0.5f));
+// Drive CH224K CFG1-3 per its truth table:
+//   5V:  CFG1=HIGH (CFG2/3 don't care)
+//   9V:  CFG1=LOW, CFG2=LOW,  CFG3=LOW
+//   12V: CFG1=LOW, CFG2=LOW,  CFG3=HIGH
+//   15V: CFG1=LOW, CFG2=HIGH, CFG3=HIGH
+void FanControl::applyCfg(float volts) {
+  if (volts <= 5.0f) {
+    digitalWrite(PIN_PD_CFG1, HIGH);
+    digitalWrite(PIN_PD_CFG2, HIGH);
+    digitalWrite(PIN_PD_CFG3, HIGH);
+  } else if (volts <= 9.0f) {
+    digitalWrite(PIN_PD_CFG1, LOW);
+    digitalWrite(PIN_PD_CFG2, LOW);
+    digitalWrite(PIN_PD_CFG3, LOW);
+  } else if (volts <= 12.0f) {
+    digitalWrite(PIN_PD_CFG1, LOW);
+    digitalWrite(PIN_PD_CFG2, LOW);
+    digitalWrite(PIN_PD_CFG3, HIGH);
+  } else {
+    // 15V
+    digitalWrite(PIN_PD_CFG1, LOW);
+    digitalWrite(PIN_PD_CFG2, HIGH);
+    digitalWrite(PIN_PD_CFG3, HIGH);
+  }
 }
-
-#endif // !FAN_CONTROL_PD
