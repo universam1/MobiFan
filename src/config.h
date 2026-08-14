@@ -135,18 +135,17 @@ constexpr float FAN_V_MIN = 5.5f;  // volts at power >0..low end; equals BOOST_V
                                     // never fully stops (no true off, by design)
 constexpr float FAN_V_MAX = 14.0f; // volts at 100% power
 
-// ---------- Controller (boost: 6 manual levels, 5 auto levels) ----------
-constexpr uint8_t  MANUAL_LEVEL_COUNT = 5;  // levels 1..5
-constexpr uint8_t  AUTO_LEVEL_COUNT   = 5;  // levels 1..5
+// ---------- Controller (boost: 4 manual levels, 4 auto levels) ----------
+constexpr uint8_t  MANUAL_LEVEL_COUNT = 4;  // levels 1..4
+constexpr uint8_t  AUTO_LEVEL_COUNT   = 4;  // levels 1..4
 constexpr float FAN_MIN_POWER_PCT = 20.0f; // auto-mode floor (never off)
-// Manual levels 1..5 -> power % (no level 0: boost can't go below ~Vin, so the
-// lowest commandable speed IS the minimum — there is no true off). Indexed by level-1.
-constexpr float MANUAL_POWER_PCT[5] = {20, 40, 60, 80, 100};
-constexpr uint8_t BOOT_MANUAL_LEVEL = 3;    // boots at 60% (level 3 = 60%)
-constexpr uint8_t BOOT_AUTO_LEVEL   = 3;    // level auto mode starts at if switched into
-// Auto ramp endpoints: level 1->40C ... level 5->20C
+// Manual levels 1..4 → target voltage (indexed by level-1)
+constexpr float MANUAL_VOLTS[4] = {9.0f, 11.0f, 12.5f, 14.0f};
+constexpr uint8_t BOOT_MANUAL_LEVEL = 2;    // boots at 11V (level 2)
+constexpr uint8_t BOOT_AUTO_LEVEL   = 2;
+// Auto ramp endpoints: level 1->37C, 2->32C, 3->27C, 4->22C
 constexpr float AUTO_BASE_TEMP_C = 15.0f;
-constexpr float autoRampMaxTempC(uint8_t level) { return 45.0f - 5.0f * level; }
+constexpr float autoRampMaxTempC(uint8_t level) { return 42.0f - 5.0f * level; }
 #endif
 
 // ---------- Behavior ----------

@@ -17,7 +17,11 @@ bool Controller::handleButton(ButtonEvent ev) {
 }
 
 float Controller::computePowerPercent(float tempC, bool tempValid) const {
-  if (_mode == Mode::Manual) return MANUAL_POWER_PCT[_manualLevel - 1];
+  if (_mode == Mode::Manual) {
+    // Convert target voltage to the power% that FanControl will map back to it
+    float v = MANUAL_VOLTS[_manualLevel - 1];
+    return (v - FAN_V_MIN) / (FAN_V_MAX - FAN_V_MIN) * 100.0f;
+  }
   // Auto with a broken sensor: fail safe to full power.
   if (!tempValid) return 100.0f;
   float tMax = autoRampMaxTempC(_autoLevel);
