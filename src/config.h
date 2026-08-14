@@ -84,12 +84,12 @@ constexpr float FAN_V_MIN = 5.0f;
 constexpr float FAN_V_MAX = 15.0f;
 
 // ---------- Controller (PD: 4 levels matching 4 voltage steps) ----------
-constexpr uint8_t  MANUAL_LEVEL_COUNT = 4;  // levels 0..3
+constexpr uint8_t  MANUAL_LEVEL_COUNT = 4;  // levels 1..4
 constexpr uint8_t  AUTO_LEVEL_COUNT   = 4;  // levels 1..4
-// Manual levels: 0=5V, 1=9V, 2=12V, 3=15V — each step changes the output.
-constexpr float MANUAL_POWER_PCT[4] = {0, 33, 66, 100};
-constexpr float FAN_MIN_POWER_PCT = 0.0f;  // auto floor → 9V step
-constexpr uint8_t BOOT_MANUAL_LEVEL = 2;    // boots at 12V (fan's rated voltage)
+// Manual levels 1..4 → 5V/9V/12V/15V (1-based; array indexed by level-1)
+constexpr float MANUAL_POWER_PCT[4] = {25, 50, 75, 100};
+constexpr float FAN_MIN_POWER_PCT = 0.0f;   // auto floor → 5V (lowest PD step)
+constexpr uint8_t BOOT_MANUAL_LEVEL = 3;    // boots at 12V (fan's rated voltage)
 constexpr uint8_t BOOT_AUTO_LEVEL   = 2;
 // Auto ramp endpoints: level 1→40C, 2→33C, 3→26C, 4→19C
 constexpr float AUTO_BASE_TEMP_C = 20.0f;
@@ -136,13 +136,13 @@ constexpr float FAN_V_MIN = 5.5f;  // volts at power >0..low end; equals BOOST_V
 constexpr float FAN_V_MAX = 14.0f; // volts at 100% power
 
 // ---------- Controller (boost: 6 manual levels, 5 auto levels) ----------
-constexpr uint8_t  MANUAL_LEVEL_COUNT = 6;  // levels 0..5
+constexpr uint8_t  MANUAL_LEVEL_COUNT = 6;  // levels 1..6
 constexpr uint8_t  AUTO_LEVEL_COUNT   = 5;  // levels 1..5
 constexpr float FAN_MIN_POWER_PCT = 20.0f; // auto-mode floor (never off)
-// Manual levels 0..5 -> power %  (0 = boost at BOOST_VOUT_MIN; fan keeps
-// spinning at its lowest voltage, there is no true off)
+// Manual levels 1..6 -> power %  (level 1 = boost at BOOST_VOUT_MIN; fan keeps
+// spinning at its lowest voltage, there is no true off). Array indexed by level-1.
 constexpr float MANUAL_POWER_PCT[6] = {0, 20, 40, 60, 80, 100};
-constexpr uint8_t BOOT_MANUAL_LEVEL = 3;    // boots into manual mode at this power step
+constexpr uint8_t BOOT_MANUAL_LEVEL = 4;    // boots at 60% (was index 3, now level 4)
 constexpr uint8_t BOOT_AUTO_LEVEL   = 3;    // level auto mode starts at if switched into
 // Auto ramp endpoints: level 1->40C ... level 5->20C
 constexpr float AUTO_BASE_TEMP_C = 15.0f;

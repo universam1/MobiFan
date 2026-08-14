@@ -86,8 +86,8 @@ void DisplayUi::drawMain(float tempC, bool tempValid, Mode mode, uint8_t level,
   u8g2.drawStr(72 - u8g2.getStrWidth(buf), 12, buf);
 
   // Power bar with current output
-  u8g2.drawFrame(0, 21, 72, 8);
-  u8g2.drawBox(1, 22, (uint8_t)(70.0f * powerPct / 100.0f), 6);
+  u8g2.drawFrame(0, 20, 72, 8);
+  u8g2.drawBox(1, 21, (uint8_t)(70.0f * powerPct / 100.0f), 6);
 
   // Bottom line: stall warning or RPM + fan supply voltage. Numbers are
   // 7x14B (up from 6x13) for legibility; the "RPM" unit is a small

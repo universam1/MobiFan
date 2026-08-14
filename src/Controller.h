@@ -7,9 +7,9 @@ enum class Mode { Manual, Auto };
 
 // Mode/level state machine and fan power computation (0..100%; FanControl
 // turns power into a supply voltage).
-// Manual: levels 0..MANUAL_LEVEL_COUNT-1 as fixed power steps.
+// Manual: levels 1..MANUAL_LEVEL_COUNT as fixed power steps.
 // Auto: levels 1..AUTO_LEVEL_COUNT select a ramp; power runs continuously
-// from the minimum at <=15C up to 100% at the ramp's max temperature.
+// from the minimum at <=base temp up to 100% at the ramp's max temperature.
 class Controller {
 public:
   // Returns true if level or mode changed (drives the UI popup).
@@ -20,7 +20,7 @@ public:
   uint8_t level() const { return _mode == Mode::Auto ? _autoLevel : _manualLevel; }
 
 private:
-  Mode _mode = Mode::Manual;
+  Mode _mode = Mode::Auto;
   uint8_t _manualLevel = BOOT_MANUAL_LEVEL;
   uint8_t _autoLevel = BOOT_AUTO_LEVEL;
 };

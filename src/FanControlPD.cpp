@@ -20,15 +20,15 @@ void FanControlPD::setPowerPercent(float pct) {
   _power = constrain(pct, 0.0f, 100.0f);
 
   // Quantize continuous power% to the 4 discrete PD voltage steps.
-  // Thresholds are midpoints between the MANUAL_POWER_PCT values (0/33/66/100):
-  //   0%       -> 5V   (minimum, fan barely spins)
-  //   1..49%   -> 9V
-  //   50..82%  -> 12V  (fan's rated voltage)
-  //   83..100% -> 15V
+  // Equal-width 25% bands so all 4 steps (including 5V) are reachable:
+  //   0..24%   -> 5V
+  //   25..49%  -> 9V
+  //   50..74%  -> 12V  (fan's rated voltage)
+  //   75..100% -> 15V
   float volts;
-  if (_power < 1.0f)       volts = PD_VOLTS[0];  // 5V
+  if (_power < 25.0f)      volts = PD_VOLTS[0];  // 5V
   else if (_power < 50.0f) volts = PD_VOLTS[1];  // 9V
-  else if (_power < 83.0f) volts = PD_VOLTS[2];  // 12V
+  else if (_power < 75.0f) volts = PD_VOLTS[2];  // 12V
   else                     volts = PD_VOLTS[3];  // 15V
 
   if (volts != _volts) {
