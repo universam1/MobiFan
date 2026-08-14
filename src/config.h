@@ -140,8 +140,8 @@ constexpr uint8_t  MANUAL_LEVEL_COUNT = 4;  // levels 1..4
 constexpr uint8_t  AUTO_LEVEL_COUNT   = 4;  // levels 1..4
 constexpr float FAN_MIN_POWER_PCT = 20.0f; // auto-mode floor (never off)
 // Manual levels 1..4 → target voltage (indexed by level-1)
-constexpr float MANUAL_VOLTS[4] = {9.0f, 11.0f, 12.5f, 14.0f};
-constexpr uint8_t BOOT_MANUAL_LEVEL = 2;    // boots at 11V (level 2)
+constexpr float MANUAL_VOLTS[4] = {5.5f, 9.0f, 12.0f, 14.0f};
+constexpr uint8_t BOOT_MANUAL_LEVEL = 2;    // boots at 9V (level 2)
 constexpr uint8_t BOOT_AUTO_LEVEL   = 2;
 // Auto ramp endpoints: level 1->37C, 2->32C, 3->27C, 4->22C
 constexpr float AUTO_BASE_TEMP_C = 15.0f;
