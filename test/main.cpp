@@ -1,7 +1,7 @@
 // DS18B20 "fake finder" bench tool, adapted from
 // https://github.com/electrical-pro/Ds_Fake_Tester/blob/master/Ds_FakeFinder.ino
 // for MobiFan's actual hardware:
-//   - OneWire bus on GPIO4 (PIN_ONEWIRE in src/config.h)
+//   - OneWire bus on GPIO10 (PIN_ONEWIRE in src/config.h)
 //   - 72x40 SSD1306 OLED (I2C SDA=5/SCL=6) via U8g2, NOT Adafruit_SSD1306 --
 //     bench-tested and confirmed the Adafruit driver renders this exact
 //     panel garbled (wrong memory map); U8g2's SSD1306_72X40_ER is the
@@ -16,7 +16,7 @@
 #include <U8g2lib.h>
 
 // ---------- Pins (match src/config.h) ----------
-constexpr int PIN_ONEWIRE  = 4; // PIN_ONEWIRE
+constexpr int PIN_ONEWIRE  = 10; // PIN_ONEWIRE
 constexpr int PIN_OLED_SDA = 5; // PIN_OLED_SDA
 constexpr int PIN_OLED_SCL = 6; // PIN_OLED_SCL
 

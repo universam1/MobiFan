@@ -2,22 +2,14 @@
 #include <WiFi.h>
 #include <esp32-hal-bt.h>
 #include "config.h"
-#if defined(TEMP_SENSOR_DS18B20)
 #include "TempSensorDS18B20.h"
-#else
-#include "TempSensor.h"
-#endif
 #include "FanControl.h"
 #include "Tach.h"
 #include "ButtonInput.h"
 #include "Controller.h"
 #include "DisplayUi.h"
 
-#if defined(TEMP_SENSOR_DS18B20)
 static TempSensorDS18B20 tempSensor;
-#else
-static TempSensor tempSensor;
-#endif
 static FanControl fan;
 static Tach tach;
 static ButtonInput button;
@@ -61,8 +53,12 @@ void loop() {
                                                tempSensor.valid());
   fan.setPowerPercent(power);
 
-  // Stall detection: commanded on but no tach pulses for STALL_TIMEOUT_MS.
-  if (power <= 0.0f || tach.rpm() > 0) spinningSince = now;
+  // Stall detection: no tach pulses for STALL_TIMEOUT_MS. Deliberately not
+  // gated on power > 0 — with the PD sink the rail is never off (0% is the 5V
+  // step, where the fan still turns), so a silent tach always means trouble.
+  // The old `power <= 0.0f ||` short-circuit blinded the check at exactly the
+  // lowest level.
+  if (tach.rpm() > 0) spinningSince = now;
   stalled = (now - spinningSince) > STALL_TIMEOUT_MS;
 
   ui.tick(now, tempSensor.celsius(), tempSensor.valid(), controller.mode(),

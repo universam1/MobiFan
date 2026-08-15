@@ -1,7 +1,5 @@
 #include "TempSensorDS18B20.h"
 
-#if defined(TEMP_SENSOR_DS18B20)
-
 namespace {
 constexpr uint8_t CMD_SKIP_ROM = 0xCC;
 constexpr uint8_t CMD_CONVERT_T = 0x44;
@@ -78,5 +76,3 @@ void TempSensorDS18B20::tick(uint32_t now) {
   _temp = _valid ? _temp + TEMP_EMA_ALPHA * (t - _temp) : t;
   _valid = true;
 }
-
-#endif // TEMP_SENSOR_DS18B20

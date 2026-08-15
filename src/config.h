@@ -37,29 +37,14 @@ constexpr uint8_t OLED_X_OFFSET = 30; // default_x_offset (28) + small nudge
 constexpr uint8_t OLED_Y_OFFSET = 12; // settled value — see note above
 constexpr int PIN_BUTTON   = 9;   // onboard BOOT button, active low
 constexpr int PIN_FAN_TACH = 7;   // open-collector, internal pull-up
-constexpr int PIN_NTC_ADC  = 3;   // ADC1_CH3 (C3: ADC1 = GPIO0-4 only, ADC2 unusable)
-                                  // divider: 3.3V - NTC - node - 100k - GND
-                                  // (NTC on top — see TempSensor.cpp, C3 ADC saturation)
 
-// ---------- NTC ----------
-constexpr float NTC_R_FIXED   = 100000.0f; // series resistor to GND
-constexpr float NTC_R_NOMINAL = 100000.0f; // 100k at 25C
-constexpr float NTC_BETA      = 3950.0f;
-constexpr float NTC_T_NOMINAL = 25.0f;
-constexpr float TEMP_EMA_ALPHA = 0.2f;     // smoothing, both temp sensors
-
-// ---------- DS18B20 (current hardware sensor, see docs/temp-sensor.md) ----------
-// Built when TEMP_SENSOR_DS18B20 is defined (env esp32c3-oled-ds18b20 in
-// platformio.ini, the default_envs). Wired normally powered: VDD->3.3V,
-// GND->GND, DQ->GPIO, with an external 4.7k pull-up from DQ to 3.3V.
-// Swaps in for the NTC divider below, which is still implemented but has no
-// env of its own since the boost hardware was dropped (see docs/temp-sensor.md);
-// Controller/DisplayUi are unaware which sensor is active.
-#if defined(TEMP_SENSOR_DS18B20)
+// ---------- DS18B20 (the temperature sensor, see docs/temp-sensor.md) ----------
+// Wired normally powered: VDD->3.3V, GND->GND, DQ->GPIO, with an external
+// 4.7k pull-up from DQ to 3.3V.
 constexpr int PIN_ONEWIRE = 10;  // GPIO10 (free since there's no boost FB PWM)
 constexpr uint8_t  DS18B20_RESOLUTION_BITS = 11; // 0.125C steps, ~375ms conversion
 constexpr uint32_t DS18B20_CONVERSION_MS = 375;  // 11-bit resolution conversion time
-#endif
+constexpr float TEMP_EMA_ALPHA = 0.2f;           // temperature smoothing
 
 // ============================================================================
 // Fan voltage control — CH224K USB-C PD sink, CFG-pin voltage selection
@@ -89,9 +74,22 @@ constexpr float MANUAL_VOLTS[4] = {5.0f, 9.0f, 12.0f, 15.0f};
 constexpr float FAN_MIN_POWER_PCT = 0.0f;   // auto floor → 5V (lowest PD step)
 constexpr uint8_t BOOT_MANUAL_LEVEL = 3;    // boots at 12V (fan's rated voltage)
 constexpr uint8_t BOOT_AUTO_LEVEL   = 2;
-// Auto ramp endpoints: level 1→40C, 2→33C, 3→26C, 4→19C
+
+// Auto ramp: power goes from FAN_MIN_POWER_PCT at <=AUTO_BASE_TEMP_C to 100% at
+// the level's end temperature. Higher level = ramps harder = full speed sooner.
+// An explicit table rather than a formula: the old `47 - 7*level` put level 4's
+// endpoint at 19C, i.e. *below* the base, which silently collapsed that level
+// into an on/off rule at 20C instead of a ramp. Every entry must stay above
+// AUTO_BASE_TEMP_C — the static_assert below enforces it.
 constexpr float AUTO_BASE_TEMP_C = 20.0f;
-constexpr float autoRampMaxTempC(uint8_t level) { return 47.0f - 7.0f * level; }
+constexpr float AUTO_RAMP_END_C[4] = {40.0f, 33.0f, 26.0f, 24.0f};
+constexpr float autoRampMaxTempC(uint8_t level) { return AUTO_RAMP_END_C[level - 1]; }
+static_assert(AUTO_RAMP_END_C[0] > AUTO_BASE_TEMP_C &&
+              AUTO_RAMP_END_C[1] > AUTO_BASE_TEMP_C &&
+              AUTO_RAMP_END_C[2] > AUTO_BASE_TEMP_C &&
+              AUTO_RAMP_END_C[3] > AUTO_BASE_TEMP_C,
+              "every auto ramp end temperature must be above AUTO_BASE_TEMP_C, "
+              "otherwise that level degenerates into an on/off switch");
 
 // ---------- Behavior ----------
 constexpr uint32_t LONG_PRESS_MS     = 800;

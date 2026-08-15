@@ -2,13 +2,11 @@
 #include <Arduino.h>
 #include "config.h"
 
-// Alternate TempSensor implementation for a normally-powered DS18B20 in
-// place of the onboard NTC divider. Selected at build time via the
-// TEMP_SENSOR_DS18B20 flag (see the esp32c3-oled-ds18b20 env in
-// platformio.ini and docs/temp-sensor.md).
-//
-// Same public interface as TempSensor (begin/tick/celsius/valid) so main.cpp
-// and every other module stay unaware of which sensor is active.
+// Temperature source for the whole firmware: a normally-powered DS18B20 on a
+// single-device 1-Wire bus. See docs/temp-sensor.md. (An NTC-divider
+// implementation used to sit behind the same begin/tick/celsius/valid
+// interface, selected by a TEMP_SENSOR_DS18B20 build flag; both the NTC code
+// and the flag are gone — this is the only sensor.)
 //
 // Conversions are polled, never blocked on: begin() does one blocking read
 // so a valid temperature exists at boot, then tick() re-triggers a new
@@ -24,11 +22,6 @@
 // succeeds no matter the bus's electrical quality. Skip ROM sidesteps
 // addressing entirely and works because this is a single-device bus (see
 // docs/temp-sensor.md for the full diagnosis).
-//
-// Body is compiled only under TEMP_SENSOR_DS18B20 (PlatformIO builds every
-// src/*.cpp regardless of which headers main.cpp includes, so the .cpp
-// guards itself rather than requiring OneWire in the NTC env's lib_deps).
-#if defined(TEMP_SENSOR_DS18B20)
 #include <OneWire.h>
 
 class TempSensorDS18B20 {
@@ -48,4 +41,3 @@ private:
   bool _valid = false;
   uint32_t _convertStart = 0;
 };
-#endif // TEMP_SENSOR_DS18B20
