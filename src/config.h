@@ -97,4 +97,15 @@ constexpr uint32_t LONG_PRESS_MS     = 800;
 constexpr uint32_t DEBOUNCE_MS       = 30;
 constexpr uint32_t POPUP_DURATION_MS = 1500;
 constexpr uint32_t STALL_TIMEOUT_MS  = 5000; // power > 0 but 0 rpm for this long
+// Tach: RPM is derived from the mean pulse *period*, not from a pulse count per
+// window. Counting pulses over 1 s quantizes to 60000/(PPR*1000) = 30 RPM per
+// pulse, which made the reading dither by +-30 RPM (e.g. 840 <-> 900).
 constexpr uint32_t TACH_PULSES_PER_REV = 2;
+constexpr uint32_t TACH_UPDATE_MS      = 500;  // rpm recompute interval
+constexpr uint32_t TACH_TIMEOUT_MS     = 1000; // no edge for this long -> 0 rpm
+constexpr uint32_t TACH_MIN_PULSE_US   = 1000; // reject edges closer than this
+                                               // (noise/ringing on the sense wire;
+                                               // shortest real half-period is ~15 ms)
+constexpr float    TACH_EMA_ALPHA      = 0.4f; // rpm smoothing, cf. TEMP_EMA_ALPHA
+                                               // (tau ~1.25 s at 500 ms updates;
+                                               // raise it for a snappier reading)

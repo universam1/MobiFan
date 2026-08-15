@@ -31,7 +31,7 @@ tasks, no heap use after setup.
 | `Controller` | Mode/level state machine + fan power computation (the core logic) |
 | `TempSensor` / `TempSensorDS18B20` | Temperature reading, EMA smoothing; two interchangeable implementations selected by PlatformIO env (see [docs/temp-sensor.md](docs/temp-sensor.md)) |
 | `FanControl` | power % → target volts → inverted FB-injection PWM (25 kHz LEDC) |
-| `Tach` | Interrupt pulse counting → RPM (2 pulses/rev) |
+| `Tach` | Interrupt-timestamped pulse periods → RPM (2 pulses/rev) |
 | `ButtonInput` | Debounce + short/long press events |
 | `DisplayUi` | U8g2 rendering: main screen + change popup (see ASCII previews in DisplayUi.h) |
 
@@ -58,6 +58,14 @@ tasks, no heap use after setup.
 - **Fail safe**: if the temp sensor reads invalid (`tempValid == false`, e.g.
   NTC open/short or DS18B20 disconnected), auto mode runs at 100%.
 - **Stall warning**: duty > 0 but zero tach pulses for 5 s.
+- **RPM is measured as a mean pulse period, never as a pulse count per window**:
+  with 2 pulses/rev a 1 s counting window resolves only 30 RPM per pulse, so the
+  reading dithered ±30 RPM. `Tach`'s ISR timestamps edges (`micros()`) and
+  accumulates intervals; `tick()` averages them and applies `TACH_EMA_ALPHA`.
+  `TACH_MIN_PULSE_US` is the glitch filter (the weak internal pull-up on a long
+  sense wire is noise-prone, and a spurious edge now skews the interval count).
+  `TACH_TIMEOUT_MS` must stay well below `STALL_TIMEOUT_MS` — it is what makes
+  `rpm()` fall to 0 when the fan stops, which the stall detection relies on.
 - Every level or mode change must trigger the UI popup
   (`DisplayUi::showChangePopup`).
 
