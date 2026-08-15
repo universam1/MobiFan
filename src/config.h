@@ -52,10 +52,11 @@ constexpr float TEMP_EMA_ALPHA = 0.2f;     // smoothing, both temp sensors
 // Built when TEMP_SENSOR_DS18B20 is defined (env esp32c3-oled-ds18b20 in
 // platformio.ini, the default_envs). Wired normally powered: VDD->3.3V,
 // GND->GND, DQ->GPIO, with an external 4.7k pull-up from DQ to 3.3V.
-// Swaps in for the NTC divider (env esp32c3-oled, kept as an alternate);
+// Swaps in for the NTC divider below, which is still implemented but has no
+// env of its own since the boost hardware was dropped (see docs/temp-sensor.md);
 // Controller/DisplayUi are unaware which sensor is active.
 #if defined(TEMP_SENSOR_DS18B20)
-constexpr int PIN_ONEWIRE = 10;  // GPIO10 (free in PD variant, no boost PWM)
+constexpr int PIN_ONEWIRE = 10;  // GPIO10 (free since there's no boost FB PWM)
 constexpr uint8_t  DS18B20_RESOLUTION_BITS = 11; // 0.125C steps, ~375ms conversion
 constexpr uint32_t DS18B20_CONVERSION_MS = 375;  // 11-bit resolution conversion time
 #endif

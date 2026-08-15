@@ -1,45 +1,55 @@
 # MobiFan — Camper Van Fan Controller
 
 Controls one or more Thermaltake Pure 20 DC fans from an ESP32-C3 board with a
-0.42" OLED, using a DS18B20 (or optional NTC) temperature sensor and a
-single button.
+0.42" OLED, using a DS18B20 temperature sensor and a single button.
 
-Fan speed is controlled by varying the fan's **supply voltage**: an MT3608
-boost module's output (~5.5–14 V from a 5 V USB input) is steered by the
-ESP32 via bidirectional PWM current injection into the converter's feedback
-pin. The module's onboard 100 kΩ trim pot stays in place and is calibrated to
-12.0 V — the *anchor* the fan sees at boot or if the firmware dies — while
-sinking FB current lets the firmware command up to 14 V. Only an 8.2 kΩ summing
-resistor and a 1kΩ/2.2µF RC filter are added externally — concept, schematic,
-calibration, and transfer function in
-[docs/boost-fb-control.md](docs/boost-fb-control.md).
+Fan speed is controlled by varying the fan's **supply voltage**. A CH224K USB-C
+PD sink (module: 3C3PDSink01 / HW-443) negotiates the voltage straight from the
+USB-C power supply; the ESP32 selects among four fixed PDOs — **5 / 9 / 12 / 15 V**
+— by driving the chip's CFG1-3 pins. There is no boost converter and no analog
+control loop: the fan rail is whatever PDO is currently selected. Concept,
+truth table, and wiring in [docs/pd-sink-control.md](docs/pd-sink-control.md).
+
+The fan is rated 12 V; 15 V is a deliberate slight overvoltage for extra
+airflow, and at 5 V the fan still turns slowly — **there is no true off**.
 
 ## Behavior
 
-- **Boot**: manual mode, level 3. Nothing is persisted.
-- **Short press**: manual mode cycles level 0→5→0 (fixed power 0/20/40/60/80/100%);
-  auto mode cycles ramp 1→5→1 (auto never turns the fan off).
+- **Boot**: auto mode, level 2. Nothing is persisted (no NVS).
+- **Short press**: cycles the level `1→2→3→4→1` — in both modes, and both modes
+  remember their own level independently.
 - **Long press (≥0.8 s)**: toggles manual ↔ auto.
-- **Auto mode**: fan power ramps linearly from the minimum (20%) at ≤15 °C up to
-  100% at the selected ramp's max temperature:
+- **Manual mode**: level = a fixed voltage.
 
-  | Auto level | 100% at |
+  | Manual level | Fan voltage |
   |---|---|
-  | 1 | 40 °C |
-  | 2 | 35 °C |
-  | 3 | 30 °C |
-  | 4 | 25 °C |
-  | 5 | 20 °C |
+  | 1 | 5 V |
+  | 2 | 9 V |
+  | 3 | 12 V (fan's rated voltage) |
+  | 4 | 15 V |
 
-  If the temp sensor reads invalid, auto mode fails safe to 100%.
-- Fan power maps to supply voltage: >0–100% → 5.5–14 V (`FAN_V_MIN`/`FAN_V_MAX`);
-  power 0 drops the boost to the same 5.5 V floor (`BOOST_VOUT_MIN`) — a
-  boost can't go lower than its own ~5 V input, so the fan never fully stops
-  (there is no true off).
-- **Display**: temperature, mode+level (`A3`/`M2`), live power bar, RPM, and
-  the fan's DC output voltage.
-  Any level or mode change shows a full-screen popup for 1.5 s.
-  A commanded-on fan with no tach pulses for 5 s shows `! FAN STALL !`.
+- **Auto mode**: the level selects a *ramp*, not a voltage. Fan power ramps
+  linearly from 0 % at ≤20 °C (`AUTO_BASE_TEMP_C`) to 100 % at the ramp's max
+  temperature, and that continuous power is then quantized onto the four PD
+  steps. Auto never turns the fan off — 0 % is the 5 V step.
+
+  | Auto level | 100 % at | 5 V below | 9 V | 12 V | 15 V above |
+  |---|---|---|---|---|---|
+  | 1 | 40 °C | 25 °C | 25–30 °C | 30–35 °C | 35 °C |
+  | 2 | 33 °C | 23.3 °C | 23.3–26.5 °C | 26.5–29.8 °C | 29.8 °C |
+  | 3 | 26 °C | 21.5 °C | 21.5–23 °C | 23–24.5 °C | 24.5 °C |
+  | 4 | 19 °C | — | — | — | 20 °C |
+
+  Auto level 4's ramp max (19 °C) is *below* the 20 °C base, so it collapses
+  into an on/off rule: 5 V at ≤20 °C, 15 V above it. The ramp maxima come from
+  `autoRampMaxTempC()` = `47 − 7 × level` in [src/config.h](src/config.h).
+
+  If the temp sensor reads invalid, auto mode fails safe to 100 % (15 V).
+- **Display**: temperature, mode+level (`A2`/`M3`), live power bar, RPM, and the
+  fan's supply voltage. Any level or mode change shows a full-screen popup for
+  1.5 s. A commanded-on fan with no tach pulses for 5 s shows `FAN STALL!`.
+  Note that stall detection is suppressed while commanded power is 0 % (manual
+  level 1, and auto at ≤20 °C) even though the fan does spin at 5 V there.
 
 ## Wiring
 
@@ -47,49 +57,35 @@ calibration, and transfer function in
 |---|---|---|
 | OLED SDA / SCL | 5 / 6 | onboard 72×40 SSD1306 |
 | Button | 9 | onboard BOOT button, active low |
-| Boost FB PWM | 10 | push-pull → 1 kΩ + 2.2 µF filter → 8.2 kΩ into MT3608 FB |
+| PD CFG1 / CFG2 / CFG3 | 2 / 1 / 0 | direct to CH224K, no external resistors |
 | Fan tach | 7 | from one fan's sense wire; internal pull-up |
-| DS18B20 | 4 | 1-Wire, normally powered, external 4.7 kΩ pull-up to 3.3 V |
-| NTC (optional alt.) | 3 | divider: 3.3 V → **NTC 100k/3950** → GPIO3 → 100 kΩ → GND |
+| DS18B20 | 10 | 1-Wire, normally powered, external 4.7 kΩ pull-up to 3.3 V |
+| NTC (alternate build) | 3 | divider: 3.3 V → **NTC 100k/3950** → GPIO3 → 100 kΩ → GND |
 
-**NTC orientation matters**: the NTC sits on the high side (to 3.3 V) because
-the ESP32-C3 ADC is only accurate up to ~2.5 V and saturates above. This way
-the node voltage rises with temperature and stays inside the accurate range
-for everything below ~52 °C, and an open sensor reads ~0 V (detectable fault
-→ auto mode fails safe to 100%).
+Power: a USB-C PD supply feeds the CH224K module, whose output (5–15 V) goes to
+the fans — wired in parallel, tach taken from one fan only. **The ESP32 board
+needs its own fixed 5 V supply**: the fan rail is renegotiated up to 15 V and
+cannot feed the board.
 
-**DS18B20 is the default sensor** (env `esp32c3-oled-ds18b20`, PlatformIO's
-`default_envs`), wired with an external 4.7 kΩ pull-up from DQ to 3.3 V. The
-plain NTC divider (env `esp32c3-oled`) remains available as a build-time
-alternative — both sensors share the same interface so the rest of the
-firmware is unchanged either way. Wiring, rationale, and the non-blocking
-conversion polling are covered in [docs/temp-sensor.md](docs/temp-sensor.md).
+**DS18B20 is the sensor the firmware ships with** (env `esp32c3-oled-ds18b20`,
+PlatformIO's `default_envs`), wired with an external 4.7 kΩ pull-up from DQ to
+3.3 V. An NTC divider implementation ([src/TempSensor.cpp](src/TempSensor.cpp))
+is still in the tree behind the same interface, but no PlatformIO env currently
+builds it — see [docs/temp-sensor.md](docs/temp-sensor.md).
 
-Power: 5 V USB feeds the MT3608, whose ~5.5–14 V output supplies the fans
-(wired in parallel, tach from only one fan). The ESP32 board needs its own
-fixed 5 V supply — the fan rail varies and cannot power it.
+**NTC orientation matters** (for that alternate build): the NTC sits on the high
+side (to 3.3 V) because the ESP32-C3 ADC is only accurate up to ~2.5 V and
+saturates above. This way the node voltage rises with temperature and stays
+inside the accurate range for everything below ~52 °C, and an open sensor reads
+~0 V (detectable fault → auto mode fails safe to 100 %).
 
-**Calibration**: with the GPIO floating (R_PWM injecting nothing), set the
-module's onboard 100 kΩ pot to **12.0 V**. That pot setting is the anchor:
-what the fans see at boot (and in any firmware-dead state) — deliberately
-the fan's rated voltage. The 14 V maximum is reached by the firmware sinking
-FB current (~4.8% duty). If your measured anchor differs, adjust
-`BOOST_VOUT_CAL` in [src/config.h](src/config.h).
-
-All pins and tunables live in [src/config.h](src/config.h).
+All pins and tunables live in [src/config.h](src/config.h) — nothing is
+hardcoded in the modules.
 
 ## Build
 
 ```sh
-pio run                 # build (default env: DS18B20 sensor)
+pio run                 # build (default env: esp32c3-oled-ds18b20)
 pio run -t upload       # flash
 pio device monitor      # serial log (115200)
-```
-
-To build with the plain NTC divider instead, target its env explicitly (see
-[docs/temp-sensor.md](docs/temp-sensor.md)):
-
-```sh
-pio run -e esp32c3-oled
-pio run -e esp32c3-oled -t upload
 ```

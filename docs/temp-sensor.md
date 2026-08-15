@@ -1,30 +1,33 @@
 # Temp Sensor Options: NTC Divider vs. DS18B20
 
-MobiFan supports two interchangeable temperature sensors, selected at build
-time via the PlatformIO environment. Both feed the same `Controller` /
-`DisplayUi` code paths through the shared `begin()`/`tick()`/`celsius()`/
-`valid()` interface — nothing above the sensor layer knows which one is
-active.
+MobiFan carries two interchangeable temperature sensor implementations, selected
+at build time by the `TEMP_SENSOR_DS18B20` macro. Both feed the same
+`Controller` / `DisplayUi` code paths through the shared
+`begin()`/`tick()`/`celsius()`/`valid()` interface — nothing above the sensor
+layer knows which one is active.
 
-| Env | Sensor | File |
+| Build | Sensor | File |
 |---|---|---|
-| `esp32c3-oled-ds18b20` (default) | DS18B20 (1-Wire, normal power) | [../src/TempSensorDS18B20.h](../src/TempSensorDS18B20.h) / [../src/TempSensorDS18B20.cpp](../src/TempSensorDS18B20.cpp) |
-| `esp32c3-oled` | NTC 100k/3950 divider | [../src/TempSensor.h](../src/TempSensor.h) / [../src/TempSensor.cpp](../src/TempSensor.cpp) |
+| `-DTEMP_SENSOR_DS18B20` (env `esp32c3-oled-ds18b20`, the default) | DS18B20 (1-Wire, normal power) | [../src/TempSensorDS18B20.h](../src/TempSensorDS18B20.h) / [../src/TempSensorDS18B20.cpp](../src/TempSensorDS18B20.cpp) |
+| macro not defined (**no env defines this today**) | NTC 100k/3950 divider | [../src/TempSensor.h](../src/TempSensor.h) / [../src/TempSensor.cpp](../src/TempSensor.cpp) |
 
 ```sh
 pio run                                         # build (default env)
 pio run -t upload                               # flash
 ```
 
-Omitting `-e` builds `esp32c3-oled-ds18b20` (the DS18B20 env), since it's
-`default_envs` in [../platformio.ini](../platformio.ini). Target
-`esp32c3-oled` explicitly to build the NTC alternate.
+Omitting `-e` builds `esp32c3-oled-ds18b20`, since it's `default_envs` in
+[../platformio.ini](../platformio.ini). **The NTC path has no env of its own
+anymore** — the earlier `esp32c3-oled` env was dropped along with the boost
+hardware. `main.cpp` still selects `TempSensor` whenever
+`TEMP_SENSOR_DS18B20` is undefined, so reviving it means adding an env that
+omits that flag (and keeps `U8g2` in `lib_deps`); the NTC wiring is still
+documented in the [main README](../README.md).
 
 ## Why two options
 
-The onboard NTC divider (see the main [../README.md](../README.md) and
-[boost-fb-control.md](boost-fb-control.md) for the rest of the hardware) is
-cheap and simple but its absolute accuracy is limited by resistor/NTC
+The NTC divider is cheap and simple but its absolute accuracy is limited by
+resistor/NTC
 tolerance (typically ±1–2°C uncalibrated). A DS18B20 trades a bit of
 response speed for a factory-trimmed ±0.5°C digital reading, at the cost of
 needing an extra library and a third wire (normal power, not parasite).
@@ -38,7 +41,7 @@ concerns parasite mode has during conversion), at the cost of one extra
 wire.
 
 ```
-GPIO4 (PIN_ONEWIRE) ------+----- DQ  (DS18B20)
+GPIO10 (PIN_ONEWIRE) -----+----- DQ  (DS18B20)
                           |
                         4.7kΩ
                           |
@@ -46,10 +49,11 @@ GPIO4 (PIN_ONEWIRE) ------+----- DQ  (DS18B20)
                                                  GND -> GND
 ```
 
-- `PIN_ONEWIRE` is GPIO4 (see [../src/config.h](../src/config.h)) — free in
-  this project's pin map (GPIO3/5/6/7/9/10 are all already used; GPIO0–4 is
-  the only usable ADC1 range on the C3, though this pin doesn't need ADC
-  here, just headroom for future use).
+- `PIN_ONEWIRE` is **GPIO10** (see [../src/config.h](../src/config.h)). It became
+  free when the MT3608 boost went away — GPIO10 used to carry the FB-injection
+  PWM. Using it here also keeps GPIO0–4 available: GPIO0/1/2 are the CH224K PD
+  CFG pins, GPIO3 is the NTC ADC input in the alternate build, and GPIO0–4 is
+  the only usable ADC1 range on the C3.
 - With the external pull-up in place, the sensor's presence pulse and
   scratchpad reads are solid — see the ROM addressing note below for the
   one real defect found on this hardware.
@@ -104,9 +108,11 @@ valid temperature is available immediately at boot, mirroring
 
 PlatformIO compiles every `.cpp` under `src/` regardless of which headers
 `main.cpp` includes, so `TempSensorDS18B20.cpp`/`.h` wrap their bodies in
-`#if defined(TEMP_SENSOR_DS18B20)` — otherwise the NTC env would fail to
-link against `OneWire`/`DallasTemperature`, which aren't in its `lib_deps`.
-`main.cpp` picks the class to instantiate with the same macro.
+`#if defined(TEMP_SENSOR_DS18B20)` — otherwise an NTC build would still try to
+compile them and fail against a `OneWire` it doesn't list in `lib_deps`.
+`main.cpp` picks the class to instantiate with the same macro. Keep that guard
+in place even though only the DS18B20 env exists right now; it is what makes
+adding an NTC env a one-line change.
 
 ## Calibrating either sensor
 

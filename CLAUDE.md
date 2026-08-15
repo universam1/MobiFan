@@ -1,12 +1,17 @@
 # MobiFan — Camper Van Fan Controller
 
 PlatformIO (Arduino framework) firmware for an ESP32-C3 0.42" OLED board that
-controls 1–2 Thermaltake Pure 20 DC fans based on an NTC 100k/3950 temperature
-sensor, operated with a single button. Fan speed is set by varying the fan's
-supply voltage: an MT3608 boost module (onboard 100 kΩ trim pot kept, 2.2 kΩ
-onboard pull-down), powered from 5 V USB, whose output the ESP32 steers by
-PWM current injection into its FB pin through an external 8.2 kΩ + 1kΩ/2.2µF
-RC filter — see [docs/boost-fb-control.md](docs/boost-fb-control.md).
+controls 1–2 Thermaltake Pure 20 DC fans based on a DS18B20 temperature sensor,
+operated with a single button. Fan speed is set by varying the fan's supply
+voltage: a CH224K USB-C PD sink (module 3C3PDSink01 / HW-443) negotiates one of
+four fixed PDOs — 5/9/12/15 V — straight from the USB-C PSU, selected by the
+ESP32 driving the chip's CFG1-3 pins. See
+[docs/pd-sink-control.md](docs/pd-sink-control.md).
+
+There is no boost converter, no PWM, and no analog control loop anywhere in this
+firmware. (An MT3608 boost driven by FB current injection was the earlier
+hardware; it was removed in `4e51d83`. Ignore any lingering reference to a
+boost, an FB node, a trim pot, or `BOOST_*` constants — none of that exists.)
 
 ## Build & flash
 
@@ -16,9 +21,13 @@ pio run -t upload       # flash over USB
 pio device monitor      # serial log, 115200 baud (USB CDC)
 ```
 
+`platformio.ini` defines two envs: `esp32c3-oled-ds18b20` (the `default_envs`,
+the actual firmware) and `esp32c3-oled-test`, a bench tool that builds only
+`test/main.cpp` instead of `src/`.
+
 There is no test suite and no CI. Verifying changes means building and, for
-behavior, flashing to hardware and watching the serial log (temp/mode/level/
-duty/rpm printed every 2 s).
+behavior, flashing to hardware and watching the serial log
+(`temp=… mode=… level=… power=…% volts=…V rpm=…` printed every 2 s).
 
 ## Architecture
 
@@ -29,35 +38,54 @@ tasks, no heap use after setup.
 | Module | Responsibility |
 |---|---|
 | `Controller` | Mode/level state machine + fan power computation (the core logic) |
-| `TempSensor` / `TempSensorDS18B20` | Temperature reading, EMA smoothing; two interchangeable implementations selected by PlatformIO env (see [docs/temp-sensor.md](docs/temp-sensor.md)) |
-| `FanControl` | power % → target volts → inverted FB-injection PWM (25 kHz LEDC) |
+| `TempSensor` / `TempSensorDS18B20` | Temperature reading, EMA smoothing; two interchangeable implementations selected by build flag (see [docs/temp-sensor.md](docs/temp-sensor.md)) |
+| `FanControl` | power % → one of 4 PD voltage steps → CH224K CFG pins |
 | `Tach` | Interrupt-timestamped pulse periods → RPM (2 pulses/rev) |
 | `ButtonInput` | Debounce + short/long press events |
 | `DisplayUi` | U8g2 rendering: main screen + change popup (see ASCII previews in DisplayUi.h) |
 
-**All pins, temperatures, duties, and timings live in
+**All pins, temperatures, voltages, and timings live in
 [src/config.h](src/config.h)** — never hardcode these in modules.
 
 ## Domain rules (do not break these)
 
-- **Boot state**: manual mode, level 3. Nothing is persisted (no NVS) — by design.
-- **Auto mode is a ramp selector**, not a temp→level lookup: levels 1–5 pick a
-  linear ramp from `FAN_MIN_POWER_PCT` (20%) at ≤15 °C to 100% at 40/35/30/25/20 °C
-  respectively. Auto never turns the fan fully off.
-- **Manual mode**: levels 0–5 = fixed power 0/20/40/60/80/100%.
+- **Boot state**: **auto** mode, auto level `BOOT_AUTO_LEVEL` (2). Manual's level
+  starts at `BOOT_MANUAL_LEVEL` (3 → 12 V) but manual is not the boot mode.
+  Nothing is persisted (no NVS) — by design.
+- **Both modes use levels 1..4** (`MANUAL_LEVEL_COUNT` / `AUTO_LEVEL_COUNT`).
+  There is no level 0 and no level 5; short press cycles `1→4→1` in both modes,
+  and each mode remembers its own level.
+- **Manual mode** is a fixed voltage per level: `MANUAL_VOLTS` = 5/9/12/15 V.
+  `Controller` does not command volts directly — it converts the level's voltage
+  back into the power % that `FanControl` will re-quantize to the same step
+  (`(v - FAN_V_MIN) / (FAN_V_MAX - FAN_V_MIN) * 100`, giving 0/40/70/100 %).
+  Both halves of that round-trip must stay consistent: change `MANUAL_VOLTS`,
+  `FAN_V_MIN`/`FAN_V_MAX`, or `FanControl`'s band edges and you must re-check
+  that each manual level still lands on its intended step.
+- **Auto mode is a ramp selector**, not a temp→level lookup: levels 1–4 pick a
+  linear ramp from `FAN_MIN_POWER_PCT` (0 %) at ≤`AUTO_BASE_TEMP_C` (20 °C) to
+  100 % at `autoRampMaxTempC(level)` = `47 − 7·level` → 40/33/26/19 °C.
+  Auto never turns the fan fully off (0 % is the 5 V step).
+  Note level 4's max (19 °C) is *below* the 20 °C base, so it degenerates into
+  on/off at 20 °C. That falls out of the formula; leave the formula alone unless
+  changing the ramp scheme deliberately.
 - **Power → voltage**: everything outside `FanControl` deals in fan power %
-  only. `FanControl` maps power >0 linearly onto `FAN_V_MIN`..`FAN_V_MAX`
-  (5.5–14 V) and power 0 to `BOOST_VOUT_MIN` (5.5 V, same as `FAN_V_MIN` —
-  a boost can't output less than its own ~5 V input, so the fan never fully
-  stops; there is no true off).
-- The main screen's bottom-right field shows the fan's **DC output voltage**
-  (e.g. `9.5V`), not power %.
-- **Button**: short press cycles the level (manual 0→5→0, auto 1→5→1);
-  long press ≥800 ms toggles manual↔auto. Manual and auto remember their
-  levels independently.
+  only. `FanControl::setPowerPercent()` quantizes 0–100 % onto the 4 PD steps in
+  equal 25 % bands (`<25→5 V`, `<50→9 V`, `<75→12 V`, `else 15 V`) and only
+  touches the CFG pins when the step actually changes. There is no continuous
+  voltage control — the rail can only be one of the four PDOs.
+- The main screen's bottom-right field shows the fan's **supply voltage**
+  (e.g. `12.0V`), not power %. The power bar above it shows the continuous
+  power %, so the bar moves within a step while the voltage does not.
+- **Button**: short press cycles the level, long press ≥800 ms toggles
+  manual↔auto.
 - **Fail safe**: if the temp sensor reads invalid (`tempValid == false`, e.g.
-  NTC open/short or DS18B20 disconnected), auto mode runs at 100%.
-- **Stall warning**: duty > 0 but zero tach pulses for 5 s.
+  DS18B20 disconnected or NTC open/short), auto mode runs at 100 % → 15 V.
+- **Stall warning**: commanded power > 0 but zero tach pulses for
+  `STALL_TIMEOUT_MS` (5 s). Because the test is `power <= 0.0f`, stall detection
+  is suppressed at the 5 V step (manual level 1, auto ≤20 °C) even though the
+  fan does spin there — a known blind spot, inherited from when power 0 meant
+  "off".
 - **RPM is measured as a mean pulse period, never as a pulse count per window**:
   with 2 pulses/rev a 1 s counting window resolves only 30 RPM per pulse, so the
   reading dithered ±30 RPM. `Tach`'s ISR timestamps edges (`micros()`) and
@@ -71,42 +99,32 @@ tasks, no heap use after setup.
 
 ## Hardware constraints
 
-- The boost PWM (GPIO10) drives an RC filter into the MT3608 FB node and is
-  **inverted and bidirectional around the anchor**: ~18.2% duty (zero
-  injection) = 12 V anchor; lower duty sinks FB current (up to 14 V at ~4.8%);
-  higher duty sources (down to ~5.5 V at ~61.5%, the commandable floor). It
-  must be **push-pull** (never open-drain — the pin has to source and
-  sink), and the frequency must stay within 20–50 kHz so the 1kΩ/2.2µF
-  filter output is smooth. Bench-verify actual voltages against
-  [docs/boost-fb-control.md](docs/boost-fb-control.md)'s truth table.
-- **R_FILT is part of the DC transfer function, not just the filter.** R_FILT
-  (1 kΩ) and R_PWM (8.2 kΩ) form a divider between the GPIO and the FB node
-  (which the regulator holds at 0.6 V), so `applyVolts()` must convert its
-  computed FB-node voltage into a *pin* voltage via
-  `V_gpio = V_node + R_FILT*(V_node - Vref)/R_PWM` before dividing by 3.3 —
-  dropping that term offsets every commanded voltage by ~11%. The filter's
-  `R_FILT·C` product is set by the Vout ripple budget (ripple scales with
-  `R_top·i_FB`, so it does not simply track R_PWM); R_FILT alone does not set
-  ripple, only the RC product does.
-- **Pot calibration coupling**: the module's onboard 100 kΩ pot is calibrated
-  so Vout = `BOOST_VOUT_CAL` (12.0 V, the fan's rated voltage) at zero
-  injection; the firmware derives the effective R_top (~41.8 kΩ) from that
-  constant. If the pot is re-adjusted, `BOOST_VOUT_CAL` must be updated to
-  match, or all commanded voltages shift.
-- **Boot/fail-safe state**: with the GPIO high-Z (before `fan.begin()`, or
-  firmware dead), the boost sits at the pot anchor — 12 V, benign for the
-  fan by design. `fan.begin()` must remain the first call in `setup()`.
-  Keep the anchor at the fan's rated voltage; the 14 V max is command-only.
-- All the inversion math is contained in `FanControl::applyVolts()` — never
-  spread duty-cycle inversion into other modules.
-- NTC divider: 3.3 V → NTC → GPIO3 (ADC) → 100 kΩ fixed → GND. The ADC reads
-  the voltage **across the fixed resistor** (rises with temperature) — the
-  conversion in TempSensor.cpp assumes this orientation. **Do not flip it**:
-  the C3 ADC saturates above ~2500 mV at 11 dB attenuation; NTC-on-top keeps
-  all temps < ~52 °C in the accurate window and makes an open NTC read ~0 V.
+- **CH224K CFG pins are GPIO2/1/0** (`PIN_PD_CFG1/2/3` — note the descending
+  order, CFG1 is *not* GPIO0). Driven as plain push-pull outputs with no
+  external resistors: the chip has internal pull-ups and its VDD is 3.3 V from
+  an internal LDO off VBUS, so levels match the C3 directly. Truth table (also
+  in `FanControl::applyCfg()` and docs/pd-sink-control.md): 5 V = CFG1 HIGH
+  (CFG2/3 don't care); 9 V = L,L,L; 12 V = L,L,H; 15 V = L,H,H. 20 V (L,H,L) is
+  deliberately never requested — too high for the fan.
+- **Boot/fail-safe state**: with the GPIOs high-Z (before `fan.begin()`, or
+  firmware dead) the CH224K defaults to 5 V, the lowest step — safe. `fan.begin()`
+  drives CFG for 5 V explicitly and then calls `setPowerPercent(0)`. Keeping
+  `fan.begin()` first in `setup()` is cheap insurance, though unlike the old
+  boost variant nothing bad happens before it runs.
+- **Voltage switching is a PD renegotiation**, ~100–300 ms during which the rail
+  may briefly dip. The fan's inertia covers it; do not add blocking waits or
+  debouncing around `applyCfg()`. `STALL_TIMEOUT_MS` (5 s) is far longer than
+  any renegotiation, so it can't false-trip.
+- **A source may not offer every PDO.** The CH224K then falls back to what it
+  can get, and the firmware cannot detect the difference — `fan.targetVolts()`
+  and the display show the *requested* voltage, not a measured one. Don't build
+  logic that assumes the rail equals the request.
+- **The ESP32 board needs its own 5 V supply.** The PD output is the fan rail and
+  is renegotiated up to 15 V, so it must never feed the board.
 - **DS18B20 is the current hardware sensor** (env `esp32c3-oled-ds18b20`,
-  the `default_envs`; GPIO4, normally powered, external 4.7 kΩ pull-up to
-  3.3 V on DQ, 11-bit resolution). `TempSensorDS18B20`'s `tick()` polls a
+  the `default_envs`; **GPIO10** (`PIN_ONEWIRE`), normally powered, external
+  4.7 kΩ pull-up to 3.3 V on DQ, 11-bit resolution). GPIO10 is free because the
+  PD variant has no boost PWM. `TempSensorDS18B20`'s `tick()` polls a
   non-blocking conversion state machine — never make it block. It talks
   to the sensor with raw `OneWire` commands via **Skip ROM (`0xCC`)**, not
   `DallasTemperature`/address search: this specific (clone) chip has a
@@ -117,8 +135,15 @@ tasks, no heap use after setup.
   single-device bus — don't add a second DS18B20 without revisiting this.
   Its `.cpp`/`.h` are wrapped in `#if defined(TEMP_SENSOR_DS18B20)` because
   PlatformIO builds every `src/*.cpp` regardless of `main.cpp`'s includes;
-  see [docs/temp-sensor.md](docs/temp-sensor.md). The plain NTC divider
-  (env `esp32c3-oled`) remains as a build-time alternative.
+  see [docs/temp-sensor.md](docs/temp-sensor.md). The NTC divider
+  implementation is still in the tree as a build-time alternative, but no env
+  currently defines the build without `TEMP_SENSOR_DS18B20`.
+- NTC divider (alternate build only): 3.3 V → NTC → GPIO3 (ADC) → 100 kΩ fixed
+  → GND. The ADC reads the voltage **across the fixed resistor** (rises with
+  temperature) — the conversion in TempSensor.cpp assumes this orientation.
+  **Do not flip it**: the C3 ADC saturates above ~2500 mV at 11 dB attenuation;
+  NTC-on-top keeps all temps < ~52 °C in the accurate window and makes an open
+  NTC read ~0 V.
 - **OLED panel alignment is per-board-tuned**: `OLED_X_OFFSET`/`OLED_Y_OFFSET`
   in config.h override u8g2's built-in offsets for this exact 72x40 SSD1306
   clone (whose glass window doesn't line up with u8g2's stock assumption);
@@ -130,7 +155,9 @@ tasks, no heap use after setup.
   `SSD1306_72X40_ER` variant — tiny canvas, every pixel of layout matters.
 - The button is the board's BOOT strapping pin (GPIO9) — active low, fine at
   runtime, but holding it during reset enters the bootloader.
-- ESP32-C3 ADC1 usable pins are GPIO0–4 only.
+- WiFi and BLE are explicitly powered off in `setup()` (`WiFi.mode(WIFI_OFF)`,
+  `btStop()`) — the device is a headless, battery-powered van install and never
+  uses the radios.
 
 ## Conventions
 

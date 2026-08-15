@@ -36,9 +36,9 @@ void setup() {
   WiFi.mode(WIFI_OFF);
   btStop();
 
-  // Fan first: in the boost variant the FB-injection PWM must run before
-  // anything else (until then the boost sits at the 12V anchor). In the PD
-  // variant the CH224K defaults to 5V until CFG pins are driven — also safe.
+  // Fan first, on principle — though with the CH224K PD sink the pre-firmware
+  // state is already safe: with the CFG GPIOs still high-Z the chip sits at 5V,
+  // the lowest step. begin() just makes that explicit.
   fan.begin();
   Serial.begin(115200);
   tempSensor.begin();
