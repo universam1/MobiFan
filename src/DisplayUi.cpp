@@ -93,10 +93,10 @@ void DisplayUi::drawMain(float tempC, bool tempValid, Mode mode, uint8_t level,
   // 7x14B (up from 6x13) for legibility; the "RPM" unit is a small
   // subscript so the digits stay this big without overflowing 72px wide.
   u8g2.setFont(u8g2_font_7x14B_tr);
-  if (stalled) {
-    const char* warn = "FAN STALL!";
-    u8g2.drawStr((72 - u8g2.getStrWidth(warn)) / 2, 39, warn);
-  } else {
+  // if (stalled) {
+  //   const char* warn = "FAN STALL!";
+  //   u8g2.drawStr((72 - u8g2.getStrWidth(warn)) / 2, 39, warn);
+  // } else {
     snprintf(buf, sizeof(buf), "%u", (unsigned)rpm);
     u8g2.drawStr(0, 39, buf);
     uint8_t x = u8g2.getStrWidth(buf);
@@ -106,5 +106,5 @@ void DisplayUi::drawMain(float tempC, bool tempValid, Mode mode, uint8_t level,
     u8g2.setFont(u8g2_font_7x14B_tr);
     snprintf(buf, sizeof(buf), "%.1fV", volts);
     u8g2.drawStr(72 - u8g2.getStrWidth(buf), 39, buf);
-  }
+  // }
 }
